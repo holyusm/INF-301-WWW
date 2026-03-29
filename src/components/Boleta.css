@@ -1,0 +1,170 @@
+/* ── Overlay ──────────────────────────────────────────────── */
+.boleta-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1050;
+  padding: 1rem;
+}
+
+.boleta-modal {
+  background: #fff;
+  border-radius: 12px;
+  padding: 2rem;
+  max-width: 460px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+/* ── Boleta (contenido imprimible) ───────────────────────── */
+.boleta-printable {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.88rem;
+  color: #111;
+}
+
+.boleta-header {
+  text-align: center;
+  border-bottom: 2px dashed #555;
+  padding-bottom: 1rem;
+  margin-bottom: 1rem;
+}
+
+.boleta-logo {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 0 0 0.2rem;
+}
+
+.boleta-address {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #444;
+}
+
+.boleta-title {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0.8rem 0 0.2rem;
+  letter-spacing: 2px;
+}
+
+.boleta-num {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+/* ── Info ─────────────────────────────────────────────────── */
+.boleta-info {
+  margin-bottom: 1rem;
+  border-bottom: 1px dashed #aaa;
+  padding-bottom: 0.8rem;
+}
+
+.boleta-info__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.25rem;
+  font-size: 0.85rem;
+}
+
+.boleta-info__row span:first-child {
+  color: #555;
+  white-space: nowrap;
+}
+
+.boleta-info__row span:last-child {
+  text-align: right;
+}
+
+/* ── Tabla ────────────────────────────────────────────────── */
+.boleta-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 0.8rem;
+  font-size: 0.85rem;
+}
+
+.boleta-table th {
+  border-bottom: 1px solid #333;
+  padding: 0.3rem 0.2rem;
+  font-weight: 700;
+}
+
+.boleta-table td {
+  padding: 0.25rem 0.2rem;
+}
+
+.boleta-table tfoot tr {
+  border-top: 1px solid #333;
+}
+
+.boleta-table tfoot td {
+  padding-top: 0.4rem;
+  font-size: 0.95rem;
+}
+
+.text-center { text-align: center; }
+.text-right  { text-align: right; }
+
+/* ── Footer ───────────────────────────────────────────────── */
+.boleta-footer {
+  text-align: center;
+  border-top: 2px dashed #555;
+  padding-top: 0.8rem;
+  font-size: 0.82rem;
+}
+
+.boleta-footer p { margin: 0.2rem 0; }
+
+.boleta-footer__legal {
+  color: #888;
+  font-size: 0.75rem;
+  margin-top: 0.5rem !important;
+}
+
+/* ── Botones ──────────────────────────────────────────────── */
+.boleta-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+  justify-content: center;
+}
+
+/* ── Estilos de impresión ─────────────────────────────────── */
+@media print {
+  /* Ocultar toda la página excepto la boleta */
+  body > * {
+    display: none !important;
+  }
+
+  /* El overlay y su contenido deben ser visibles */
+  body.boleta-print-active > .boleta-overlay {
+    display: flex !important;
+    position: static !important;
+    background: none !important;
+    padding: 0 !important;
+  }
+
+  .boleta-modal {
+    box-shadow: none !important;
+    max-height: none !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  .boleta-actions,
+  .no-print {
+    display: none !important;
+  }
+
+  .boleta-printable {
+    display: block !important;
+  }
+}
