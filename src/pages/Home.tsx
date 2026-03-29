@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { PRODUCTS } from '../data/products';
 import './Home.css';
 
@@ -20,6 +21,8 @@ const BENEFITS = [
 ];
 
 export default function Home() {
+  const { isAuthenticated } = useAuth();
+
   return (
     <main className="home">
 
@@ -125,17 +128,19 @@ export default function Home() {
       </section>
 
       {/* ── CTA BANNER ───────────────────────────────────── */}
-      <section className="cta-register">
-        <div className="container cta-register__inner">
-          <div>
-            <h2>¿Eres cliente nuevo?</h2>
-            <p>Regístrate y recibe tu primera entrega con 10% de descuento.</p>
+      {!isAuthenticated && (
+        <section className="cta-register">
+          <div className="container cta-register__inner">
+            <div>
+              <h2>¿Eres cliente nuevo?</h2>
+              <p>Regístrate y recibe tu primera entrega con 10% de descuento.</p>
+            </div>
+            <Link to="/register" className="btn btn-light btn-lg cta-register__btn">
+              Registrarme gratis
+            </Link>
           </div>
-          <Link to="/register" className="btn btn-light btn-lg cta-register__btn">
-            Registrarme gratis
-          </Link>
-        </div>
-      </section>
+        </section>
+      )}
 
     </main>
   );

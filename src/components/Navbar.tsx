@@ -46,14 +46,31 @@ export default function Navbar() {
         </button>
 
         <div className={`collapse navbar-collapse ${menuOpen ? 'show' : ''}`} id="main-navbar">
-          {/* Centro: solo links principales */}
+          {/* Centro: solo links principales y gestión */}
           <nav className="navbar-nav navbar__nav-center mb-3 mb-lg-0 align-items-lg-center gap-lg-1">
             <NavLink to="/" end className={navLinkClassName} onClick={close}>Inicio</NavLink>
             <NavLink to="/menu" className={navLinkClassName} onClick={close}>Menú</NavLink>
             <NavLink to="/ayuda" className={navLinkClassName} onClick={close}>Ayuda</NavLink>
+
+            {/* Links de rol en el centro (excepto cliente) */}
+            {isCajero && (
+              <NavLink to="/cashier" className={navLinkClassName} onClick={close}>
+                Caja
+              </NavLink>
+            )}
+            {isDespachador && (
+              <NavLink to="/dispatcher" className={navLinkClassName} onClick={close}>
+                Despacho
+              </NavLink>
+            )}
+            {isAdmin && (
+              <NavLink to="/admin" className={navLinkClassName} onClick={close}>
+                Admin
+              </NavLink>
+            )}
           </nav>
 
-          {/* Derecha: usuario → links de rol → cerrar sesión → carrito */}
+          {/* Derecha: usuario → Mis Pedidos (solo cliente) → cerrar sesión → carrito */}
           <div className="d-flex flex-column flex-lg-row align-items-lg-center gap-2 ms-lg-auto navbar__auth">
             {isAuthenticated ? (
               <>
@@ -65,25 +82,10 @@ export default function Navbar() {
                   <span>Hola, {user?.fullName.split(' ')[0]}</span>
                 </span>
 
-                {/* 2. Links de rol */}
-                {(isCliente || isAdmin) && (
+                {/* 2. Mis Pedidos (solo cliente) */}
+                {isCliente && (
                   <NavLink to="/orders" className={navLinkClassName} onClick={close}>
                     Mis Pedidos
-                  </NavLink>
-                )}
-                {isCajero && (
-                  <NavLink to="/cashier" className={navLinkClassName} onClick={close}>
-                    Caja
-                  </NavLink>
-                )}
-                {isDespachador && (
-                  <NavLink to="/dispatcher" className={navLinkClassName} onClick={close}>
-                    Despacho
-                  </NavLink>
-                )}
-                {isAdmin && (
-                  <NavLink to="/admin" className={navLinkClassName} onClick={close}>
-                    Admin
                   </NavLink>
                 )}
 
@@ -93,7 +95,7 @@ export default function Navbar() {
                 </button>
 
                 {/* 4. Carrito */}
-                {(isCliente || isAdmin) && (
+                {isCliente && (
                   <button
                     className="btn btn-link position-relative p-0 text-white d-flex align-items-center justify-content-center btn-cart"
                     onClick={() => { close(); openCart(); }}
