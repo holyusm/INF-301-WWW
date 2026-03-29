@@ -11,7 +11,7 @@ const CATEGORIES: { value: Category; label: string }[] = [
   { value: 'rolls', label: CATEGORY_LABELS.rolls },
   { value: 'nigiris', label: CATEGORY_LABELS.nigiris },
   { value: 'temakis', label: CATEGORY_LABELS.temakis },
-  { value: 'combos', label: CATEGORY_LABELS.combos },
+  { value: 'combos',  label: CATEGORY_LABELS.combos },
   { value: 'bebidas', label: CATEGORY_LABELS.bebidas },
 ];
 

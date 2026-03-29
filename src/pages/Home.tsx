@@ -5,11 +5,11 @@ import './Home.css';
 const featured = PRODUCTS.filter((p) => p.featured && p.available).slice(0, 3);
 
 const CATEGORY_BADGE: Record<string, { label: string; className: string }> = {
-  rolls:   { label: 'POPULAR',     className: 'home-badge home-badge--popular' },
-  nigiris: { label: 'TRADICIONAL', className: 'home-badge home-badge--tradicional' },
-  temakis: { label: 'TEMAKI',      className: 'home-badge home-badge--temaki' },
-  combos:  { label: 'COMBO',       className: 'home-badge home-badge--combo' },
-  bebidas: { label: 'BEBIDA',      className: 'home-badge home-badge--bebida' },
+  rolls:      { label: 'POPULAR',     className: 'home-badge home-badge--popular' },
+  nigiris:    { label: 'TRADICIONAL', className: 'home-badge home-badge--tradicional' },
+  temakis:    { label: 'TEMAKI',      className: 'home-badge home-badge--temaki' },
+  combos:     { label: 'COMBO',       className: 'home-badge home-badge--combo' },
+  bebidas:    { label: 'BEBIDA',      className: 'home-badge home-badge--bebida' },
 };
 
 const BENEFITS = [
