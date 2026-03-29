@@ -6,13 +6,12 @@ import './Navbar.css';
 
 export default function Navbar() {
   const { user, isAuthenticated, logout } = useAuth();
-  const { totalItems } = useCart();
+  const { totalItems, openCart } = useCart();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const navLinkClassName = ({ isActive }: { isActive: boolean }) => (
-    `nav-link px-lg-3 ${isActive ? 'active fw-semibold' : ''}`
-  );
+  const navLinkClassName = ({ isActive }: { isActive: boolean }) =>
+    `nav-link px-lg-3 ${isActive ? 'active fw-semibold' : ''}`;
 
   const handleLogout = () => {
     logout();
@@ -20,10 +19,17 @@ export default function Navbar() {
     setMenuOpen(false);
   };
 
+  const close = () => setMenuOpen(false);
+
+  const isAdmin      = user?.role === 'admin' || user?.role === 'dueño';
+  const isCajero     = user?.role === 'cajero'      || isAdmin;
+  const isDespachador= user?.role === 'despachador' || isAdmin;
+  const isCliente    = user?.role === 'cliente';
+
   return (
     <header className="navbar navbar-expand-lg navbar-dark site-navbar sticky-top py-0">
       <div className="container navbar__inner">
-        <Link to="/" className="navbar-brand navbar__logo" onClick={() => setMenuOpen(false)}>
+        <Link to="/" className="navbar-brand navbar__logo" onClick={close}>
           <span className="navbar__logo-mark">🍣</span>
           <span>Fukusuke</span>
         </Link>
@@ -31,7 +37,7 @@ export default function Navbar() {
         <button
           className="navbar-toggler border-0 shadow-none"
           type="button"
-          onClick={() => setMenuOpen((open) => !open)}
+          onClick={() => setMenuOpen((o) => !o)}
           aria-label="Abrir menú"
           aria-controls="main-navbar"
           aria-expanded={menuOpen}
@@ -41,29 +47,47 @@ export default function Navbar() {
 
         <div className={`collapse navbar-collapse ${menuOpen ? 'show' : ''}`} id="main-navbar">
           <nav className="navbar-nav me-auto mb-3 mb-lg-0 align-items-lg-center gap-lg-1">
-            <NavLink to="/" end className={navLinkClassName} onClick={() => setMenuOpen(false)}>
-              Inicio
-            </NavLink>
-            <NavLink to="/menu" className={navLinkClassName} onClick={() => setMenuOpen(false)}>
-              Menú
-            </NavLink>
+            <NavLink to="/" end className={navLinkClassName} onClick={close}>Inicio</NavLink>
+            <NavLink to="/menu" className={navLinkClassName} onClick={close}>Menú</NavLink>
+            <NavLink to="/ayuda" className={navLinkClassName} onClick={close}>Ayuda</NavLink>
 
-            {isAuthenticated && (
+            {/* Links exclusivos del cliente */}
+            {isAuthenticated && (isCliente || isAdmin) && (
               <>
-                <NavLink to="/cart" className={navLinkClassName} onClick={() => setMenuOpen(false)}>
+                <button
+                  className="nav-link px-lg-3 border-0 bg-transparent"
+                  onClick={() => { close(); openCart(); }}
+                >
                   Carrito
                   {totalItems > 0 && (
-                    <span className="badge badge-counter rounded-pill text-bg-danger ms-2">{totalItems}</span>
+                    <span className="badge badge-counter rounded-pill text-bg-danger ms-2">
+                      {totalItems}
+                    </span>
                   )}
-                </NavLink>
-                <NavLink to="/orders" className={navLinkClassName} onClick={() => setMenuOpen(false)}>
+                </button>
+                <NavLink to="/orders" className={navLinkClassName} onClick={close}>
                   Mis Pedidos
                 </NavLink>
               </>
             )}
 
-            {isAuthenticated && (user?.role === 'admin' || user?.role === 'dueño') && (
-              <NavLink to="/admin" className={navLinkClassName} onClick={() => setMenuOpen(false)}>
+            {/* Cajero virtual */}
+            {isAuthenticated && isCajero && (
+              <NavLink to="/cashier" className={navLinkClassName} onClick={close}>
+                Caja
+              </NavLink>
+            )}
+
+            {/* Despachador */}
+            {isAuthenticated && isDespachador && (
+              <NavLink to="/dispatcher" className={navLinkClassName} onClick={close}>
+                Despacho
+              </NavLink>
+            )}
+
+            {/* Admin / Dueño */}
+            {isAuthenticated && isAdmin && (
+              <NavLink to="/admin" className={navLinkClassName} onClick={close}>
                 Admin
               </NavLink>
             )}
@@ -72,25 +96,22 @@ export default function Navbar() {
           <div className="d-flex flex-column flex-lg-row align-items-lg-center gap-2 navbar__auth">
             {isAuthenticated ? (
               <div className="d-flex flex-column flex-lg-row align-items-lg-center gap-2 gap-lg-3 ms-lg-3">
-                <span className="navbar__user-name">Hola, {user?.fullName.split(' ')[0]}</span>
+                <span className="navbar__user-name">
+                  Hola, {user?.fullName.split(' ')[0]}
+                  <span className="badge text-bg-secondary ms-1" style={{ fontSize: '0.65rem' }}>
+                    {user?.role}
+                  </span>
+                </span>
                 <button className="btn btn-outline-light btn-sm px-3" onClick={handleLogout}>
                   Cerrar sesión
                 </button>
               </div>
             ) : (
               <>
-                <Link
-                  to="/login"
-                  className="btn btn-outline-light btn-sm px-3"
-                  onClick={() => setMenuOpen(false)}
-                >
+                <Link to="/login"    className="btn btn-outline-light btn-sm px-3" onClick={close}>
                   Iniciar sesión
                 </Link>
-                <Link
-                  to="/register"
-                  className="btn btn-primary btn-sm px-3"
-                  onClick={() => setMenuOpen(false)}
-                >
+                <Link to="/register" className="btn btn-primary btn-sm px-3"       onClick={close}>
                   Registrarse
                 </Link>
               </>
