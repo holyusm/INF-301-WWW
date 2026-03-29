@@ -4,6 +4,7 @@ import { useOrders } from '../context/OrderContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { validateRun } from '../utils/run';
+import { validateEmailDeliverable } from '../utils/emailValidation';
 import type { OrderStatus, Product, User } from '../types';
 import './Admin.css';
 
@@ -198,8 +199,16 @@ export default function Admin() {
     return Object.keys(errs).length === 0;
   };
 
-  const handleSaveUser = () => {
+  const handleSaveUser = async () => {
     if (!validateUserForm()) return;
+
+    const emailCheck = await validateEmailDeliverable(userForm.email);
+    if (!emailCheck.valid) {
+      setUserFormErrors((prev) => ({ ...prev, email: emailCheck.reason }));
+      showToast(emailCheck.reason, 'danger');
+      return;
+    }
+
     const data: Omit<User, 'id'> = {
       run: userForm.run, fullName: userForm.fullName, email: userForm.email,
       phone: userForm.phone, address: userForm.address, commune: userForm.commune,
