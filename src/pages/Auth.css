@@ -114,3 +114,76 @@
 @media (max-width: 600px) {
   .auth-card      { padding: 1.5rem 1rem; }
 }
+
+/* ── Indicador de fortaleza de contraseña (RNF-7) ──────── */
+.pw-strength {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.4rem;
+}
+
+.pw-strength__bar {
+  flex: 1;
+  height: 5px;
+  background: #e9ecef;
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.pw-strength__fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.3s ease, background 0.3s ease;
+}
+
+.pw-strength__label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  text-transform: capitalize;
+  min-width: 4.5rem;
+  text-align: right;
+}
+
+/* ── Botones de cuenta demo ─────────────────────────────── */
+.demo-account-btn {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--color-border, #eee);
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.8rem;
+  margin-bottom: 0.3rem;
+  transition: background 0.15s;
+  gap: 0.5rem;
+}
+
+.demo-account-btn:hover { background: #f5f5f5; }
+
+.demo-role {
+  font-weight: 700;
+  color: var(--color-secondary);
+  min-width: 80px;
+}
+
+.demo-email {
+  color: var(--color-text-light);
+  flex: 1;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Hint de campo ──────────────────────────────────────── */
+.form-hint {
+  font-size: 0.77rem;
+  color: var(--color-text-light, #888);
+  margin-top: 0.25rem;
+  display: block;
+}
