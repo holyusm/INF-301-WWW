@@ -2,6 +2,7 @@ import {
   createContext,
   useContext,
   useReducer,
+  useState,
   type ReactNode,
 } from 'react';
 import type { CartItem, Product } from '../types';
@@ -13,7 +14,7 @@ interface CartState {
 
 // ── Acciones ────────────────────────────────────────────────
 type CartAction =
-  | { type: 'ADD'; product: Product }
+  | { type: 'ADD';    product: Product }
   | { type: 'REMOVE'; productId: number }
   | { type: 'UPDATE'; productId: number; quantity: number }
   | { type: 'CLEAR' };
@@ -55,16 +56,21 @@ interface CartContextValue {
   items: CartItem[];
   totalItems: number;
   totalPrice: number;
-  addItem: (product: Product) => void;
-  removeItem: (productId: number) => void;
-  updateQuantity: (productId: number, quantity: number) => void;
-  clearCart: () => void;
+  /** Estado visual del drawer lateral */
+  isCartOpen: boolean;
+  openCart:   () => void;
+  closeCart:  () => void;
+  addItem:          (product: Product) => void;
+  removeItem:       (productId: number) => void;
+  updateQuantity:   (productId: number, quantity: number) => void;
+  clearCart:        () => void;
 }
 
 const CartContext = createContext<CartContextValue | null>(null);
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(cartReducer, { items: [] });
+  const [state,      dispatch]     = useReducer(cartReducer, { items: [] });
+  const [isCartOpen, setCartOpen]  = useState(false);
 
   const totalItems = state.items.reduce((s, i) => s + i.quantity, 0);
   const totalPrice = state.items.reduce(
@@ -78,8 +84,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
         items: state.items,
         totalItems,
         totalPrice,
-        addItem: (p) => dispatch({ type: 'ADD', product: p }),
-        removeItem: (id) => dispatch({ type: 'REMOVE', productId: id }),
+        isCartOpen,
+        openCart:  ()  => setCartOpen(true),
+        closeCart: ()  => setCartOpen(false),
+        // Al agregar un producto se abre automáticamente el drawer
+        addItem: (p) => {
+          dispatch({ type: 'ADD', product: p });
+          setCartOpen(true);
+        },
+        removeItem: (id)       => dispatch({ type: 'REMOVE', productId: id }),
         updateQuantity: (id, qty) =>
           dispatch({ type: 'UPDATE', productId: id, quantity: qty }),
         clearCart: () => dispatch({ type: 'CLEAR' }),
