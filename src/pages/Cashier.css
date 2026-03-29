@@ -1,0 +1,104 @@
+.cashier-page {
+  padding: 2.5rem 0 4rem;
+}
+
+.cashier-section {
+  margin-bottom: 3rem;
+}
+
+.cashier-section__title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-secondary);
+  margin-bottom: 1.25rem;
+  display: flex;
+  align-items: center;
+}
+
+.cashier-empty {
+  text-align: center;
+  padding: 3rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--color-text-light);
+}
+
+.cashier-empty span { font-size: 3rem; }
+
+/* Grid de tarjetas */
+.cashier-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1.25rem;
+}
+
+/* Tarjeta */
+.cashier-card {
+  border-radius: var(--radius);
+  border-top: 4px solid #198754 !important;
+  overflow: hidden;
+}
+
+.cashier-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 1rem 1.2rem 0.5rem;
+  gap: 0.5rem;
+}
+
+.cashier-card__header h3 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin: 0;
+  color: var(--color-secondary);
+}
+
+.cashier-card__date {
+  font-size: 0.78rem;
+  color: var(--color-text-light);
+  margin: 0.15rem 0 0;
+}
+
+.cashier-card__body {
+  padding: 0.5rem 1.2rem;
+  font-size: 0.88rem;
+  color: var(--color-text);
+}
+
+.cashier-card__body p { margin: 0.2rem 0; }
+
+.cashier-card__items {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+/* Mini-tabla de items en la tarjeta */
+.cashier-items-table {
+  width: 100%;
+  font-size: 0.82rem;
+  border-collapse: collapse;
+  margin-top: 0.3rem;
+}
+
+.cashier-items-table td {
+  padding: 0.15rem 0.2rem;
+  vertical-align: top;
+}
+
+.cashier-card__total {
+  margin-top: 0.5rem !important;
+  font-size: 0.95rem;
+  border-top: 1px solid var(--color-border);
+  padding-top: 0.4rem;
+}
+
+.cashier-card__actions {
+  padding: 0.75rem 1.2rem 1rem;
+}
+
+@media (max-width: 600px) {
+  .cashier-grid { grid-template-columns: 1fr; }
+}

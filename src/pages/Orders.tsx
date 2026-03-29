@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useOrders } from '../context/OrderContext';
+import { useToast } from '../context/ToastContext';
 import type { OrderStatus } from '../types';
 import './Orders.css';
 
@@ -23,8 +24,9 @@ const STATUS_BADGES: Record<OrderStatus, string> = {
 };
 
 export default function Orders() {
-  const { user } = useAuth();
+  const { user }      = useAuth();
   const { orders, cancelOrder } = useOrders();
+  const { showToast } = useToast();
   const [cancelId, setCancelId] = useState<number | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const visibleOrders = orders.filter((order) => order.userId === user?.id);
@@ -37,6 +39,7 @@ export default function Orders() {
     cancelOrder(orderId, cancelReason.trim());
     setCancelId(null);
     setCancelReason('');
+    showToast('Pedido anulado correctamente.', 'success');
   };
 
   return (

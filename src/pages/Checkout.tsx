@@ -3,22 +3,29 @@ import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { useOrders } from '../context/OrderContext';
+import Boleta from '../components/Boleta';
+import type { Order } from '../types';
 import './Checkout.css';
 
+// ── Comunas con cobertura de despacho (~3 km desde Maipú) ───
+const DELIVERY_COMMUNES = [
+  'Maipú', 'Cerrillos', 'Pudahuel', 'Pedro Aguirre Cerda', 'Padre Hurtado',
+];
+
 const PAYMENT_METHODS = [
-  { value: 'tarjeta', label: '💳 Tarjeta crédito/débito' },
-  { value: 'servipag', label: '💳 Servipag' },
+  { value: 'tarjeta',       label: '💳 Tarjeta crédito/débito' },
+  { value: 'servipag',      label: '💳 Servipag' },
   { value: 'transferencia', label: '🏦 Transferencia bancaria' },
 ] as const;
 
 type PaymentMethod = typeof PAYMENT_METHODS[number]['value'];
-type CardBrand = 'visa' | 'mastercard' | 'amex' | 'unknown';
+type CardBrand     = 'visa' | 'mastercard' | 'amex' | 'unknown';
 
 const detectCardBrand = (number: string): CardBrand => {
-  const digits = number.replace(/\D/g, '');
-  if (/^4/.test(digits)) return 'visa';
-  if (/^(5[1-5]|2(2[2-9]|[3-6]\d|7[01]|720))/.test(digits)) return 'mastercard';
-  if (/^3[47]/.test(digits)) return 'amex';
+  const d = number.replace(/\D/g, '');
+  if (/^4/.test(d)) return 'visa';
+  if (/^(5[1-5]|2(2[2-9]|[3-6]\d|7[01]|720))/.test(d)) return 'mastercard';
+  if (/^3[47]/.test(d)) return 'amex';
   return 'unknown';
 };
 
@@ -35,33 +42,34 @@ const formatExpiry = (value: string): string => {
 
 export default function Checkout() {
   const { items, totalPrice, clearCart } = useCart();
-  const { user } = useAuth();
-  const { createOrder } = useOrders();
-  const navigate = useNavigate();
+  const { user }                         = useAuth();
+  const { createOrder }                  = useOrders();
+  const navigate                         = useNavigate();
 
-  const [address, setAddress] = useState(user?.address ?? '');
-  const [payment, setPayment] = useState<PaymentMethod>('tarjeta');
-  const [card, setCard] = useState({
-    holder: '',
-    number: '',
-    expiry: '',
-    cvv: '',
-  });
+  const [address,  setAddress]  = useState(user?.address ?? '');
+  const [commune,  setCommune]  = useState(user?.commune ?? '');
+  const [payment,  setPayment]  = useState<PaymentMethod>('tarjeta');
+  const [card,     setCard]     = useState({ holder: '', number: '', expiry: '', cvv: '' });
   const [cardError, setCardError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [orderId] = useState(() => Math.floor(Math.random() * 90000) + 10000);
+  const [loading,  setLoading]  = useState(false);
+  const [success,  setSuccess]  = useState(false);
+  const [createdOrder, setCreatedOrder] = useState<Order | null>(null);
+  const [showBoleta,   setShowBoleta]   = useState(false);
+
+  const communeError = commune.trim() &&
+    !DELIVERY_COMMUNES.some((c) => c.toLowerCase() === commune.trim().toLowerCase());
 
   const detectedBrand = detectCardBrand(card.number);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!address || !user || items.length === 0) return;
+    if (!address || !commune || !user || items.length === 0) return;
+    if (communeError) return;
 
     if (payment === 'tarjeta') {
       const cardDigits = card.number.replace(/\D/g, '');
-      const expOk = /^(0[1-9]|1[0-2])\/\d{2}$/.test(card.expiry);
-      const cvvOk = /^\d{3,4}$/.test(card.cvv);
+      const expOk      = /^(0[1-9]|1[0-2])\/\d{2}$/.test(card.expiry);
+      const cvvOk      = /^\d{3,4}$/.test(card.cvv);
       if (!card.holder || cardDigits.length < 15 || !expOk || !cvvOk) {
         setCardError('Completa correctamente los datos de la tarjeta.');
         return;
@@ -71,19 +79,22 @@ export default function Checkout() {
     setCardError('');
     setLoading(true);
     await new Promise((r) => setTimeout(r, 1200));
-    createOrder({
+
+    const order = createOrder({
       userId: user.id,
       items,
       total: totalPrice,
-      address,
+      address: `${address}, ${commune}`,
+      paymentMethod: payment,
     });
+
+    setCreatedOrder(order);
     setLoading(false);
     setSuccess(true);
     clearCart();
-    setTimeout(() => navigate('/orders'), 2000);
   };
 
-  if (items.length === 0) {
+  if (items.length === 0 && !success) {
     return (
       <main className="checkout-page container">
         <div className="checkout-success card border-0 shadow-sm">
@@ -98,15 +109,33 @@ export default function Checkout() {
     );
   }
 
-  if (success) {
+  if (success && createdOrder) {
     return (
       <main className="checkout-page container">
         <div className="checkout-success card border-0 shadow-sm">
           <span>✅</span>
-          <h2>¡Pedido #FKS-{orderId} recibido!</h2>
-          <p>Te enviaremos la boleta a <strong>{user?.email}</strong>.</p>
-          <p>Redirigiendo a tus pedidos…</p>
+          <h2>¡Pedido #{String(createdOrder.id).slice(-6)} recibido!</h2>
+          <p>
+            El pago fue confirmado. Nuestro cajero virtual procesará tu orden
+            y te enviará la boleta a <strong>{user?.email}</strong>.
+          </p>
+          <div className="d-flex gap-2 justify-content-center flex-wrap mt-2">
+            <button className="btn btn-outline-primary" onClick={() => setShowBoleta(true)}>
+              🧾 Ver boleta
+            </button>
+            <button className="btn btn-primary" onClick={() => navigate('/orders')}>
+              Ver mis pedidos
+            </button>
+          </div>
         </div>
+
+        {showBoleta && user && (
+          <Boleta
+            order={createdOrder}
+            user={user}
+            onClose={() => setShowBoleta(false)}
+          />
+        )}
       </main>
     );
   }
@@ -125,14 +154,40 @@ export default function Checkout() {
           </div>
 
           <div className="mb-3">
-            <label className="form-label">Dirección de despacho</label>
+            <label className="form-label">Dirección de despacho *</label>
             <input
               className="form-control"
               value={address}
               onChange={(e) => setAddress(e.target.value)}
-              placeholder="Av. Pajaritos 1234, Dpto 5B, Maipú"
+              placeholder="Av. Pajaritos 1234, Dpto 5B"
               required
             />
+          </div>
+
+          <div className="mb-3">
+            <label className="form-label">
+              Comuna de despacho *
+              <span className="text-muted" style={{ fontSize: '0.8rem', marginLeft: '0.4rem' }}>
+                (radio 3 km desde Maipú)
+              </span>
+            </label>
+            <select
+              className={`form-select ${communeError ? 'is-invalid' : ''}`}
+              value={commune}
+              onChange={(e) => setCommune(e.target.value)}
+              required
+            >
+              <option value="">Selecciona tu comuna…</option>
+              {DELIVERY_COMMUNES.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+              <option disabled value="__other">─── Fuera del área de cobertura ───</option>
+            </select>
+            {communeError && (
+              <div className="invalid-feedback">
+                Lo sentimos, no llegamos a esa comuna. Cobertura: {DELIVERY_COMMUNES.join(', ')}.
+              </div>
+            )}
           </div>
 
           <div className="mb-3">
@@ -145,7 +200,10 @@ export default function Checkout() {
 
           <div className="checkout-payments">
             {PAYMENT_METHODS.map((m) => (
-              <label key={m.value} className={`payment-option form-check ${payment === m.value ? 'selected' : ''}`}>
+              <label
+                key={m.value}
+                className={`payment-option form-check ${payment === m.value ? 'selected' : ''}`}
+              >
                 <input
                   className="form-check-input"
                   type="radio"
@@ -162,9 +220,9 @@ export default function Checkout() {
           {payment === 'tarjeta' && (
             <div className="checkout-card-box">
               <div className="checkout-card-brands" aria-label="Marcas disponibles">
-                <span className={`brand-pill ${detectedBrand === 'visa' ? 'active' : ''}`}>VISA</span>
+                <span className={`brand-pill ${detectedBrand === 'visa'       ? 'active' : ''}`}>VISA</span>
                 <span className={`brand-pill ${detectedBrand === 'mastercard' ? 'active' : ''}`}>Mastercard</span>
-                <span className={`brand-pill ${detectedBrand === 'amex' ? 'active' : ''}`}>Amex</span>
+                <span className={`brand-pill ${detectedBrand === 'amex'       ? 'active' : ''}`}>Amex</span>
               </div>
 
               <div className="mb-3">
@@ -173,10 +231,9 @@ export default function Checkout() {
                   className="form-control"
                   placeholder="Como aparece en la tarjeta"
                   value={card.holder}
-                  onChange={(e) => setCard((prev) => ({ ...prev, holder: e.target.value }))}
+                  onChange={(e) => setCard((p) => ({ ...p, holder: e.target.value }))}
                 />
               </div>
-
               <div className="mb-3">
                 <label className="form-label">Número de tarjeta</label>
                 <input
@@ -184,10 +241,9 @@ export default function Checkout() {
                   inputMode="numeric"
                   placeholder="1234 5678 9012 3456"
                   value={card.number}
-                  onChange={(e) => setCard((prev) => ({ ...prev, number: formatCardNumber(e.target.value) }))}
+                  onChange={(e) => setCard((p) => ({ ...p, number: formatCardNumber(e.target.value) }))}
                 />
               </div>
-
               <div className="row g-3">
                 <div className="col-7">
                   <label className="form-label">Vencimiento</label>
@@ -196,7 +252,7 @@ export default function Checkout() {
                     inputMode="numeric"
                     placeholder="MM/YY"
                     value={card.expiry}
-                    onChange={(e) => setCard((prev) => ({ ...prev, expiry: formatExpiry(e.target.value) }))}
+                    onChange={(e) => setCard((p) => ({ ...p, expiry: formatExpiry(e.target.value) }))}
                   />
                 </div>
                 <div className="col-5">
@@ -206,17 +262,43 @@ export default function Checkout() {
                     inputMode="numeric"
                     placeholder="123"
                     value={card.cvv}
-                    onChange={(e) => setCard((prev) => ({ ...prev, cvv: e.target.value.replace(/\D/g, '').slice(0, 4) }))}
+                    onChange={(e) => setCard((p) => ({ ...p, cvv: e.target.value.replace(/\D/g, '').slice(0, 4) }))}
                   />
                 </div>
               </div>
 
               {cardError && <div className="alert alert-danger mt-3 mb-0">{cardError}</div>}
-              <p className="checkout-card-note">Modo demo: estos datos no se almacenan ni procesan.</p>
+              <p className="checkout-card-note">
+                Modo demo — datos no almacenados ni procesados.
+              </p>
             </div>
           )}
 
-          <button className="btn btn-primary checkout-submit w-100" type="submit" disabled={loading}>
+          {payment === 'servipag' && (
+            <div className="checkout-card-box">
+              <p className="text-muted mb-0" style={{ fontSize: '0.9rem' }}>
+                Serás redirigido a Servipag para completar el pago de forma segura.
+                (Simulado — no se procesa pago real.)
+              </p>
+            </div>
+          )}
+
+          {payment === 'transferencia' && (
+            <div className="checkout-card-box">
+              <p className="mb-1" style={{ fontSize: '0.9rem' }}><strong>Datos de transferencia:</strong></p>
+              <p className="text-muted mb-0" style={{ fontSize: '0.85rem' }}>
+                Banco: BancoEstado · Cuenta corriente: 00-123-45678-9<br />
+                RUT: 76.543.210-0 · Fukusuke Sushi SpA<br />
+                (Simulado — no se realiza transferencia real.)
+              </p>
+            </div>
+          )}
+
+          <button
+            className="btn btn-primary checkout-submit w-100"
+            type="submit"
+            disabled={loading || !!communeError || !commune}
+          >
             {loading ? 'Procesando pago…' : `Pagar $${totalPrice.toLocaleString('es-CL')}`}
           </button>
         </form>
