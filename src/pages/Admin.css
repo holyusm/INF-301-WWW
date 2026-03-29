@@ -167,3 +167,42 @@
 @media (max-width: 768px) {
   .report-summary { grid-template-columns: 1fr; }
 }
+
+/* ── Formulario inline (add/edit) ──────────────────────────── */
+.admin-form {
+  padding: 1.5rem;
+  border-radius: var(--radius);
+  background: #fafafa;
+  border: 1px solid var(--color-border) !important;
+}
+
+.admin-form__title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-secondary);
+  margin-bottom: 1rem;
+}
+
+.admin-form__footer {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+}
+
+/* ── Confirmación de borrado inline ────────────────────────── */
+.admin-del-confirm {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+}
+
+/* ── Tag de categoría ──────────────────────────────────────── */
+.tag {
+  font-size: 0.78rem;
+  background: var(--color-border);
+  color: var(--color-secondary);
+  padding: 0.2rem 0.6rem;
+  border-radius: 20px;
+  font-weight: 600;
+}
