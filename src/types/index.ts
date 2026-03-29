@@ -49,6 +49,7 @@ export interface Order {
   status: OrderStatus;
   createdAt: string;
   address: string;
+  paymentMethod?: string;
   cancelReason?: string;
 }
 

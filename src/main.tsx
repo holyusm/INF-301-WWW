@@ -6,15 +6,18 @@ import App from './App';
 import { AuthProvider } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import { OrderProvider } from './context/OrderContext';
+import { ToastProvider } from './context/ToastContext';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <AuthProvider>
-      <OrderProvider>
-        <CartProvider>
-          <App />
-        </CartProvider>
-      </OrderProvider>
-    </AuthProvider>
+    <ToastProvider>
+      <AuthProvider>
+        <OrderProvider>
+          <CartProvider>
+            <App />
+          </CartProvider>
+        </OrderProvider>
+      </AuthProvider>
+    </ToastProvider>
   </StrictMode>
 );
