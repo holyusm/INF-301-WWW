@@ -54,17 +54,17 @@ export default function Menu() {
                 {c.label}
               </button>
             ))}
-          </div>
 
-          <label className="menu-filters__available form-check m-0">
-            <input
-              className="form-check-input"
-              type="checkbox"
-              checked={onlyAvailable}
-              onChange={(e) => setOnlyAvailable(e.target.checked)}
-            />
-            <span className="form-check-label">Solo disponibles</span>
-          </label>
+            <label className="menu-filters__available form-check m-0">
+              <input
+                className="form-check-input"
+                type="checkbox"
+                checked={onlyAvailable}
+                onChange={(e) => setOnlyAvailable(e.target.checked)}
+              />
+              <span className="form-check-label">Solo disponibles</span>
+            </label>
+          </div>
         </div>
 
         {filtered.length === 0 ? (
