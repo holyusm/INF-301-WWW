@@ -59,7 +59,7 @@ export default function Navbar() {
               <>
                 {/* 1. Info usuario */}
                 <span className="navbar__user-name">
-                  <span className="badge text-bg-secondary" style={{ fontSize: '0.78rem' }}>
+                  <span className="badge text-bg-secondary mb-1" style={{ fontSize: '0.85rem', textTransform: 'capitalize' }}>
                     {user?.role}
                   </span>
                   <span>Hola, {user?.fullName.split(' ')[0]}</span>
