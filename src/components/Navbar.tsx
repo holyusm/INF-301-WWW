@@ -28,7 +28,7 @@ export default function Navbar() {
 
   return (
     <header className="navbar navbar-expand-lg navbar-dark site-navbar sticky-top py-0">
-      <div className="container navbar__inner">
+      <div className="container-fluid navbar__inner px-4">
         <Link to="/" className="navbar-brand navbar__logo" onClick={close}>
           <span className="navbar__logo-mark">🍣</span>
           <span>Fukusuke</span>
@@ -46,66 +46,71 @@ export default function Navbar() {
         </button>
 
         <div className={`collapse navbar-collapse ${menuOpen ? 'show' : ''}`} id="main-navbar">
-          <nav className="navbar-nav me-auto mb-3 mb-lg-0 align-items-lg-center gap-lg-1">
+          {/* Centro: solo links principales */}
+          <nav className="navbar-nav navbar__nav-center mb-3 mb-lg-0 align-items-lg-center gap-lg-1">
             <NavLink to="/" end className={navLinkClassName} onClick={close}>Inicio</NavLink>
             <NavLink to="/menu" className={navLinkClassName} onClick={close}>Menú</NavLink>
             <NavLink to="/ayuda" className={navLinkClassName} onClick={close}>Ayuda</NavLink>
-
-            {/* Links exclusivos del cliente */}
-            {isAuthenticated && (isCliente || isAdmin) && (
-              <>
-                <button
-                  className="nav-link px-lg-3 border-0 bg-transparent"
-                  onClick={() => { close(); openCart(); }}
-                >
-                  Carrito
-                  {totalItems > 0 && (
-                    <span className="badge badge-counter rounded-pill text-bg-danger ms-2">
-                      {totalItems}
-                    </span>
-                  )}
-                </button>
-                <NavLink to="/orders" className={navLinkClassName} onClick={close}>
-                  Mis Pedidos
-                </NavLink>
-              </>
-            )}
-
-            {/* Cajero virtual */}
-            {isAuthenticated && isCajero && (
-              <NavLink to="/cashier" className={navLinkClassName} onClick={close}>
-                Caja
-              </NavLink>
-            )}
-
-            {/* Despachador */}
-            {isAuthenticated && isDespachador && (
-              <NavLink to="/dispatcher" className={navLinkClassName} onClick={close}>
-                Despacho
-              </NavLink>
-            )}
-
-            {/* Admin / Dueño */}
-            {isAuthenticated && isAdmin && (
-              <NavLink to="/admin" className={navLinkClassName} onClick={close}>
-                Admin
-              </NavLink>
-            )}
           </nav>
 
-          <div className="d-flex flex-column flex-lg-row align-items-lg-center gap-2 navbar__auth">
+          {/* Derecha: usuario → links de rol → cerrar sesión → carrito */}
+          <div className="d-flex flex-column flex-lg-row align-items-lg-center gap-2 ms-lg-auto navbar__auth">
             {isAuthenticated ? (
-              <div className="d-flex flex-column flex-lg-row align-items-lg-center gap-2 gap-lg-3 ms-lg-3">
+              <>
+                {/* 1. Info usuario */}
                 <span className="navbar__user-name">
-                  Hola, {user?.fullName.split(' ')[0]}
-                  <span className="badge text-bg-secondary ms-1" style={{ fontSize: '0.65rem' }}>
+                  <span className="badge text-bg-secondary" style={{ fontSize: '0.78rem' }}>
                     {user?.role}
                   </span>
+                  <span>Hola, {user?.fullName.split(' ')[0]}</span>
                 </span>
-                <button className="btn btn-outline-light btn-sm px-3" onClick={handleLogout}>
+
+                {/* 2. Links de rol */}
+                {(isCliente || isAdmin) && (
+                  <NavLink to="/orders" className={navLinkClassName} onClick={close}>
+                    Mis Pedidos
+                  </NavLink>
+                )}
+                {isCajero && (
+                  <NavLink to="/cashier" className={navLinkClassName} onClick={close}>
+                    Caja
+                  </NavLink>
+                )}
+                {isDespachador && (
+                  <NavLink to="/dispatcher" className={navLinkClassName} onClick={close}>
+                    Despacho
+                  </NavLink>
+                )}
+                {isAdmin && (
+                  <NavLink to="/admin" className={navLinkClassName} onClick={close}>
+                    Admin
+                  </NavLink>
+                )}
+
+                {/* 3. Cerrar sesión con estilo nav-link */}
+                <button className="nav-link px-lg-3 navbar__logout" onClick={handleLogout}>
                   Cerrar sesión
                 </button>
-              </div>
+
+                {/* 4. Carrito */}
+                {(isCliente || isAdmin) && (
+                  <button
+                    className="btn btn-link position-relative p-0 text-white d-flex align-items-center justify-content-center btn-cart"
+                    onClick={() => { close(); openCart(); }}
+                    aria-label="Carrito de compras"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" className="bi bi-cart3" viewBox="0 0 16 16">
+                      <path d="M0 1.5A.5.5 0 0 1 .5 1H2a.5.5 0 0 1 .485.379L2.89 3H14.5a.5.5 0 0 1 .49.598l-1 5a.5.5 0 0 1-.465.401l-9.397.472L4.415 11H13a.5.5 0 0 1 0 1H4a.5.5 0 0 1-.491-.408L2.01 3.607 1.61 2H.5a.5.5 0 0 1-.5-.5M3.102 4l.84 4.479 9.144-.459L13.89 4zM5 12a2 2 0 1 0 0 4 2 2 0 0 0 0-4m7 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4m-7 1a1 1 0 1 1 0 2 1 1 0 0 1 0-2m7 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2"/>
+                    </svg>
+                    {totalItems > 0 && (
+                      <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style={{ fontSize: '0.7rem' }}>
+                        {totalItems}
+                        <span className="visually-hidden">productos en el carrito</span>
+                      </span>
+                    )}
+                  </button>
+                )}
+              </>
             ) : (
               <>
                 <Link to="/login"    className="btn btn-outline-light btn-sm px-3" onClick={close}>

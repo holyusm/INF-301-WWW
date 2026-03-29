@@ -7,7 +7,16 @@
 }
 
 .navbar__inner {
-  height: 64px;
+  height: 76px;
+  position: relative;
+}
+
+@media (min-width: 992px) {
+  .navbar__nav-center {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+  }
 }
 
 .navbar__logo {
@@ -52,6 +61,11 @@
 .navbar__user-name {
   color: rgba(255,255,255,0.85);
   font-size: 0.88rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.2;
+  gap: 0.15rem;
 }
 
 .site-navbar .btn-outline-light:hover {
@@ -75,7 +89,26 @@
     justify-content: center;
   }
 
-  .site-navbar .nav-link {
+.site-navbar .nav-link {
     padding: 0.7rem 0.9rem;
   }
+}
+
+.site-navbar .navbar__logout {
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.site-navbar .btn-cart {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.1);
+  transition: background var(--transition), transform var(--transition);
+}
+
+.site-navbar .btn-cart:hover {
+  background: rgba(255,255,255,0.2);
+  transform: scale(1.05);
 }
