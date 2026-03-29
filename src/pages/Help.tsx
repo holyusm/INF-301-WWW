@@ -11,7 +11,7 @@ const SECTIONS: Section[] = [
   {
     id: 'inicio',
     title: 'Primeros pasos',
-    icon: '🚀',
+    icon: 'bi-rocket-takeoff',
     content: (
       <div>
         <p>Bienvenido al manual de ayuda de <strong>Fukusuke Sushi-Delivery</strong>. Aquí encontrarás todo lo que necesitas para usar la plataforma.</p>
@@ -27,7 +27,7 @@ const SECTIONS: Section[] = [
   {
     id: 'cuenta',
     title: 'Gestión de cuenta',
-    icon: '👤',
+    icon: 'bi-person-circle',
     content: (
       <div>
         <h4>Registro</h4>
@@ -48,7 +48,7 @@ const SECTIONS: Section[] = [
   {
     id: 'carrito',
     title: 'Carrito de compras',
-    icon: '🛒',
+    icon: 'bi-cart3',
     content: (
       <div>
         <p>El carrito se despliega automáticamente al agregar un producto. Desde ahí puedes:</p>
@@ -66,7 +66,7 @@ const SECTIONS: Section[] = [
   {
     id: 'pedido',
     title: 'Realizar un pedido',
-    icon: '🍱',
+    icon: 'bi-bag-check',
     content: (
       <div>
         <p>Para completar tu compra:</p>
@@ -87,7 +87,7 @@ const SECTIONS: Section[] = [
   {
     id: 'seguimiento',
     title: 'Estado de mis pedidos',
-    icon: '📦',
+    icon: 'bi-list-check',
     content: (
       <div>
         <p>En <strong>Mis pedidos</strong> puedes ver el historial y estado de cada orden:</p>
@@ -96,12 +96,12 @@ const SECTIONS: Section[] = [
             <tr><th>Estado</th><th>Descripción</th></tr>
           </thead>
           <tbody>
-            <tr><td>⏳ Pendiente</td><td>El pedido fue recibido y está en espera.</td></tr>
-            <tr><td>✅ Pagado</td><td>El pago fue confirmado por el cajero.</td></tr>
-            <tr><td>👨‍🍳 Preparando</td><td>El equipo está preparando tu pedido.</td></tr>
-            <tr><td>🏍️ En camino</td><td>Tu pedido está siendo despachado.</td></tr>
-            <tr><td>📦 Entregado</td><td>El pedido fue entregado exitosamente.</td></tr>
-            <tr><td>❌ Anulado</td><td>El pedido fue cancelado.</td></tr>
+            <tr><td>Pendiente</td><td>El pedido fue recibido y está en espera.</td></tr>
+            <tr><td>Pagado</td><td>El pago fue confirmado por el cajero.</td></tr>
+            <tr><td>Preparando</td><td>El equipo está preparando tu pedido.</td></tr>
+            <tr><td>En camino</td><td>Tu pedido está siendo despachado.</td></tr>
+            <tr><td>Entregado</td><td>El pedido fue entregado exitosamente.</td></tr>
+            <tr><td>Anulado</td><td>El pedido fue cancelado.</td></tr>
           </tbody>
         </table>
         <p className="mt-3">Puedes <strong>anular un pedido</strong> mientras esté en estado Pendiente, Pagado o Preparando. Ingresa el motivo de anulación para confirmar.</p>
@@ -111,7 +111,7 @@ const SECTIONS: Section[] = [
   {
     id: 'seguridad',
     title: 'Seguridad',
-    icon: '🔒',
+    icon: 'bi-shield-lock',
     content: (
       <div>
         <h4>Contraseña segura</h4>
@@ -132,7 +132,7 @@ const SECTIONS: Section[] = [
   {
     id: 'roles',
     title: 'Roles del sistema',
-    icon: '🧑‍💼',
+    icon: 'bi-people',
     content: (
       <div>
         <p>Fukusuke cuenta con diferentes roles de usuario:</p>
@@ -154,14 +154,14 @@ const SECTIONS: Section[] = [
   {
     id: 'soporte',
     title: 'Soporte y contacto',
-    icon: '💬',
+    icon: 'bi-headset',
     content: (
       <div>
         <p>Si tienes problemas o consultas, contáctanos:</p>
         <ul>
-          <li>📧 <strong>soporte@fukusuke.cl</strong></li>
-          <li>📞 <strong>+56 2 2345 6789</strong> (Lun–Vie, 9:00–18:00)</li>
-          <li>🌐 Formulario de contacto en nuestra página web</li>
+          <li><strong>soporte@fukusuke.cl</strong></li>
+          <li><strong>+56 2 2345 6789</strong> (Lun–Vie, 9:00–18:00)</li>
+          <li>Formulario de contacto en nuestra página web</li>
         </ul>
         <div className="help-alert help-alert--warning">
           Para consultas sobre un pedido específico, ten a mano el número de pedido (ej: <strong>FKS-00001</strong>).
@@ -175,32 +175,30 @@ export default function Help() {
   return (
     <main className="help-page container">
       <div className="help-header">
-        <span className="help-header__icon">📖</span>
+        <i className="bi bi-journal-text help-header__icon" aria-hidden="true" />
         <h1>Manual de ayuda</h1>
         <p>Todo lo que necesitas saber para usar Fukusuke Sushi-Delivery</p>
       </div>
 
       <div className="help-layout">
-        {/* Índice lateral */}
         <nav className="help-nav" aria-label="Secciones de ayuda">
           <p className="help-nav__title">Contenido</p>
           <ul>
             {SECTIONS.map((s) => (
               <li key={s.id}>
                 <a href={`#${s.id}`} className="help-nav__link">
-                  {s.icon} {s.title}
+                  <i className={`bi ${s.icon}`} aria-hidden="true" /> {s.title}
                 </a>
               </li>
             ))}
           </ul>
         </nav>
 
-        {/* Contenido */}
         <div className="help-content">
           {SECTIONS.map((s) => (
             <section key={s.id} id={s.id} className="help-section card border-0 shadow-sm">
               <h2 className="help-section__title">
-                <span>{s.icon}</span> {s.title}
+                <i className={`bi ${s.icon}`} aria-hidden="true" /> {s.title}
               </h2>
               <div className="help-section__body">{s.content}</div>
             </section>

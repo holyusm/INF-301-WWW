@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { validateRun } from '../utils/run';
+import { validateEmailDeliverable } from '../utils/emailValidation';
 import type { RegisterForm } from '../types';
 import './Auth.css';
 
@@ -132,6 +133,16 @@ export default function Register() {
       return;
     }
     setLoading(true);
+
+    // RF-6 / RF-11: Validar existencia real del correo con AbstractAPI
+    const emailCheck = await validateEmailDeliverable(form.email);
+    if (!emailCheck.valid) {
+      setLoading(false);
+      setErrors((prev) => ({ ...prev, email: emailCheck.reason }));
+      showToast(emailCheck.reason, 'danger');
+      return;
+    }
+
     const ok = await register({ ...form });
     setLoading(false);
 
