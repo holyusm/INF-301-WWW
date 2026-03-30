@@ -1,17 +1,11 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { PRODUCTS } from '../data/products';
+import ProductCard from '../components/ProductCard';
 import './Home.css';
 
 const featured = PRODUCTS.filter((p) => p.featured && p.available).slice(0, 3);
 
-const CATEGORY_BADGE: Record<string, { label: string; className: string }> = {
-  rolls:      { label: 'POPULAR',     className: 'home-badge home-badge--popular' },
-  nigiris:    { label: 'TRADICIONAL', className: 'home-badge home-badge--tradicional' },
-  temakis:    { label: 'TEMAKI',      className: 'home-badge home-badge--temaki' },
-  combos:     { label: 'COMBO',       className: 'home-badge home-badge--combo' },
-  bebidas:    { label: 'BEBIDA',      className: 'home-badge home-badge--bebida' },
-};
 
 const BENEFITS = [
   { icon: 'bi-truck',          title: 'Despacho gratuito',  desc: 'Dentro de un radio de 3 km de nuestro local en Maipú.' },
@@ -76,38 +70,11 @@ export default function Home() {
           </div>
 
           <div className="row g-4">
-            {featured.map((p) => {
-              const badge = CATEGORY_BADGE[p.category];
-              return (
-                <div key={p.id} className="col-12 col-md-6 col-xl-4 d-flex">
-                  <article className={`featured-card${!p.available ? ' featured-card--unavailable' : ''}`}>
-                    <div className="featured-card__img-wrap">
-                      <img src={p.image} alt={p.name} loading="lazy" />
-                      {badge && <span className={badge.className}>{badge.label}</span>}
-                      {!p.available && (
-                        <div className="featured-card__overlay">No disponible</div>
-                      )}
-                    </div>
-
-                    <div className="featured-card__body">
-                      <h3 className="featured-card__name">{p.name}</h3>
-                      <p className="featured-card__desc">{p.description}</p>
-                      <div className="featured-card__footer">
-                        <span className="featured-card__price">
-                          ${p.price.toLocaleString('es-CL')}
-                        </span>
-                        <button
-                          className="btn btn-danger btn-sm featured-card__btn"
-                          disabled={!p.available}
-                        >
-                          <i className="bi bi-plus-lg" aria-hidden="true" /> Agregar
-                        </button>
-                      </div>
-                    </div>
-                  </article>
-                </div>
-              );
-            })}
+            {featured.map((p) => (
+              <div key={p.id} className="col-12 col-md-6 col-xl-4 d-flex">
+                <ProductCard product={p} />
+              </div>
+            ))}
           </div>
         </div>
       </section>

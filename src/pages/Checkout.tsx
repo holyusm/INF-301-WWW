@@ -8,6 +8,9 @@ import type { Order } from '../types';
 import './Checkout.css';
 
 // ── Comunas con cobertura de despacho (~3 km desde Maipú) ───
+import { sendOrderReceipt } from '../utils/emailService';
+
+// ── Comunas con cobertura de despacho (~3 km desde Maipú) ───
 const DELIVERY_COMMUNES = [
   'Maipú', 'Cerrillos', 'Pudahuel', 'Pedro Aguirre Cerda', 'Padre Hurtado',
 ];
@@ -92,6 +95,9 @@ export default function Checkout() {
     setLoading(false);
     setSuccess(true);
     clearCart();
+
+    // Enviar el correo de forma asíncrona sin bloquear la UI
+    sendOrderReceipt(order, { fullName: user.fullName || 'Cliente', email: user.email });
   };
 
   if (items.length === 0 && !success) {
