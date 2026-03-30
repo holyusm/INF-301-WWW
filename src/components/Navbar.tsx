@@ -75,7 +75,7 @@ export default function Navbar() {
             {isAuthenticated ? (
               <>
                 {/* 1. Info usuario */}
-                <span className="navbar__user-name">
+                <span className="navbar__user-name me-lg-3">
                   <span className="badge text-bg-secondary mb-1" style={{ fontSize: '0.85rem', textTransform: 'capitalize' }}>
                     {user?.role}
                   </span>
