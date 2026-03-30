@@ -177,7 +177,6 @@ export default function Register() {
             <div className="col-md-6">
               <label className="form-label" htmlFor="reg-run">
                 RUN *
-                <span className="form-hint"> (Ej: 12.345.678-5)</span>
               </label>
               <input
                 id="reg-run"

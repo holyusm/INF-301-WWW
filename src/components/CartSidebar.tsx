@@ -14,15 +14,16 @@ export default function CartSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // No mostrar el drawer en /cart ni en /checkout (ya tienen su propio layout)
-  const hiddenPaths = ['/cart', '/checkout'];
-  if (hiddenPaths.includes(location.pathname)) return null;
-
   // Bloquear scroll del body mientras el drawer está abierto
   useEffect(() => {
     document.body.style.overflow = isCartOpen ? 'hidden' : '';
     return () => { document.body.style.overflow = ''; };
   }, [isCartOpen]);
+
+  // No mostrar el drawer en /cart ni en /checkout (ya tienen su propio layout)
+  const hiddenPaths = ['/cart', '/checkout'];
+  if (hiddenPaths.includes(location.pathname)) return null;
+
 
   const handleCheckout = () => {
     closeCart();
