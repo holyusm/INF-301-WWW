@@ -290,7 +290,7 @@ export default function Register() {
             <div className="col-md-6">
               <label className="form-label" htmlFor="reg-phone">
                 Teléfono *
-                <span className="form-hint"> (+56912345678)</span>
+                <span className="text-muted ms-1 fw-normal" style={{ fontSize: '0.8rem' }}>(+56912345678)</span>
               </label>
               <input
                 id="reg-phone"
@@ -310,7 +310,7 @@ export default function Register() {
             <div className="col-md-6">
               <label className="form-label" htmlFor="reg-birth">
                 Fecha de nacimiento *
-                <span className="form-hint"> (mínimo 13 años)</span>
+                <span className="text-muted ms-1 fw-normal" style={{ fontSize: '0.8rem' }}>(mínimo 13 años)</span>
               </label>
               <input
                 id="reg-birth"
