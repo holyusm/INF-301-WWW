@@ -161,7 +161,7 @@ export default function Register() {
     <main className="auth-page auth-page--wide">
       <div className="auth-card auth-card--wide card border-0 shadow-sm">
         <div className="auth-card__header">
-          <span className="auth-card__icon">📝</span>
+          <i className="bi bi-person-vcard auth-card__icon d-block mb-3" style={{ fontSize: '2.5rem', color: 'var(--color-primary)' }}></i>
           <h1>Crear cuenta</h1>
           <p>Regístrate para hacer tus pedidos en línea</p>
         </div>
@@ -248,11 +248,11 @@ export default function Register() {
                 />
                 <button
                   type="button"
-                  className="btn btn-outline-secondary"
+                  className="btn btn-outline-secondary d-flex align-items-center justify-content-center"
                   onClick={() => setShowPw((v) => !v)}
                   aria-label={showPw ? 'Ocultar contraseña' : 'Mostrar contraseña'}
                 >
-                  {showPw ? '🙈' : '👁️'}
+                  <i className={`bi ${showPw ? 'bi-eye-slash' : 'bi-eye'}`} />
                 </button>
                 {errors.password && <div className="invalid-feedback">{errors.password}</div>}
               </div>
