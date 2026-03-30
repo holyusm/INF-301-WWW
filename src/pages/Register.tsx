@@ -236,7 +236,7 @@ export default function Register() {
             {/* ── Contraseña con medidor de fortaleza (RNF-7) ── */}
             <div className="col-md-6">
               <label className="form-label" htmlFor="reg-pw">Contraseña *</label>
-              <div className="input-group">
+              <div className="position-relative">
                 <input
                   id="reg-pw"
                   className={`form-control ${errors.password ? 'is-invalid' : ''}`}
@@ -245,12 +245,14 @@ export default function Register() {
                   onChange={set('password')}
                   placeholder="Mínimo 6 caracteres"
                   autoComplete="new-password"
+                  style={{ paddingRight: '2.5rem' }}
                 />
                 <button
                   type="button"
-                  className="btn btn-outline-secondary d-flex align-items-center justify-content-center"
+                  className="btn btn-link position-absolute top-50 end-0 translate-middle-y text-secondary p-2 me-1 border-0"
                   onClick={() => setShowPw((v) => !v)}
                   aria-label={showPw ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  style={{ zIndex: 5, background: 'none' }}
                 >
                   <i className={`bi ${showPw ? 'bi-eye-slash' : 'bi-eye'}`} />
                 </button>
