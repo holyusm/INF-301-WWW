@@ -44,9 +44,9 @@ const formatExpiry = (value: string): string => {
 };
 
 export default function Checkout() {
-  const { items, totalPrice, clearCart } = useCart();
-  const { user }                         = useAuth();
-  const { createOrder }                  = useOrders();
+  const { items, totalPrice, clearCart }    = useCart();
+  const { user, saveAddress, removeAddress } = useAuth();
+  const { createOrder }                      = useOrders();
   const navigate                         = useNavigate();
 
   const [address,  setAddress]  = useState(user?.address ?? '');
@@ -54,10 +54,23 @@ export default function Checkout() {
   const [payment,  setPayment]  = useState<PaymentMethod>('tarjeta');
   const [card,     setCard]     = useState({ holder: '', number: '', expiry: '', cvv: '' });
   const [cardError, setCardError] = useState('');
-  const [loading,  setLoading]  = useState(false);
-  const [success,  setSuccess]  = useState(false);
+  const [paymentResult, setPaymentResult] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [willFail, setWillFail] = useState(false);
   const [createdOrder, setCreatedOrder] = useState<Order | null>(null);
   const [showBoleta,   setShowBoleta]   = useState(false);
+  const [savingLabel,  setSavingLabel]  = useState('');
+  const [showSaveForm, setShowSaveForm] = useState(false);
+
+  const applyProfile = (profile: 'success' | 'failure') => {
+    if (profile === 'success') {
+      setCard({ holder: 'Cliente Demo', number: '4111 1111 1111 1111', expiry: '12/28', cvv: '123' });
+      setWillFail(false);
+    } else {
+      setCard({ holder: 'Cliente Demo', number: '4000 0000 0000 0002', expiry: '12/28', cvv: '456' });
+      setWillFail(true);
+    }
+    setCardError('');
+  };
 
   const communeError = commune.trim() &&
     !DELIVERY_COMMUNES.some((c) => c.toLowerCase() === commune.trim().toLowerCase());
@@ -80,8 +93,13 @@ export default function Checkout() {
     }
 
     setCardError('');
-    setLoading(true);
-    await new Promise((r) => setTimeout(r, 1200));
+    setPaymentResult('loading');
+    await new Promise((r) => setTimeout(r, 2200));
+
+    if (willFail) {
+      setPaymentResult('error');
+      return;
+    }
 
     const order = createOrder({
       userId: user.id,
@@ -92,15 +110,14 @@ export default function Checkout() {
     });
 
     setCreatedOrder(order);
-    setLoading(false);
-    setSuccess(true);
+    setPaymentResult('success');
     clearCart();
 
     // Enviar el correo de forma asíncrona sin bloquear la UI
     sendOrderReceipt(order, { fullName: user.fullName || 'Cliente', email: user.email });
   };
 
-  if (items.length === 0 && !success) {
+  if (items.length === 0 && paymentResult === 'idle') {
     return (
       <main className="checkout-page container">
         <div className="checkout-success card border-0 shadow-sm">
@@ -115,15 +132,48 @@ export default function Checkout() {
     );
   }
 
-  if (success && createdOrder) {
+  if (paymentResult === 'loading') {
     return (
       <main className="checkout-page container">
         <div className="checkout-success card border-0 shadow-sm">
-          <span>✅</span>
-          <h2>¡Pedido #{String(createdOrder.id).slice(-6)} recibido!</h2>
+          <div className="checkout-spinner" aria-label="Procesando pago" />
+          <h2>Procesando pago…</h2>
+          <p>Por favor espera mientras confirmamos tu transacción.</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (paymentResult === 'error') {
+    return (
+      <main className="checkout-page container">
+        <div className="checkout-success card border-0 shadow-sm">
+          <span className="checkout-result-icon checkout-result-icon--error">✕</span>
+          <h2 className="text-danger">No se ha podido procesar el pago</h2>
+          <p>Tu tarjeta fue rechazada. Verifica los datos o usa otro método de pago.</p>
+          <div className="d-flex gap-2 justify-content-center flex-wrap mt-2">
+            <button
+              className="btn btn-outline-secondary"
+              onClick={() => { setPaymentResult('idle'); setCardError(''); }}
+            >
+              Volver al proceso de pago
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (paymentResult === 'success' && createdOrder) {
+    return (
+      <main className="checkout-page container">
+        <div className="checkout-success card border-0 shadow-sm">
+          <span className="checkout-result-icon checkout-result-icon--success">✓</span>
+          <h2 className="text-success">¡Pago realizado con éxito!</h2>
           <p>
-            El pago fue confirmado. Nuestro cajero virtual procesará tu orden
-            y te enviará la boleta a <strong>{user?.email}</strong>.
+            Pedido <strong>#{String(createdOrder.id).slice(-6)}</strong> confirmado.
+            Nuestro cajero virtual procesará tu orden y te enviará la boleta a{' '}
+            <strong>{user?.email}</strong>.
           </p>
           <div className="d-flex gap-2 justify-content-center flex-wrap mt-2">
             <button className="btn btn-outline-primary" onClick={() => setShowBoleta(true)}>
@@ -159,12 +209,43 @@ export default function Checkout() {
             <input className="form-control" value={user?.fullName ?? ''} readOnly />
           </div>
 
+          {/* ── Direcciones guardadas ── */}
+          {(user?.savedAddresses?.length ?? 0) > 0 && (
+            <div className="mb-3">
+              <label className="form-label">Direcciones guardadas</label>
+              <div className="saved-addresses">
+                {user!.savedAddresses!.map((sa, i) => {
+                  const isActive = sa.address === address && sa.commune === commune;
+                  return (
+                    <div
+                      key={i}
+                      className={`saved-address-card${isActive ? ' active' : ''}`}
+                      onClick={() => { setAddress(sa.address); setCommune(sa.commune); setShowSaveForm(false); }}
+                    >
+                      <div className="saved-address-card__label">{sa.label}</div>
+                      <div className="saved-address-card__detail">{sa.address}</div>
+                      <div className="saved-address-card__commune">{sa.commune}</div>
+                      <button
+                        type="button"
+                        className="saved-address-card__remove"
+                        title="Eliminar"
+                        onClick={(e) => { e.stopPropagation(); removeAddress(i); }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="mb-3">
             <label className="form-label">Dirección de despacho *</label>
             <input
               className="form-control"
               value={address}
-              onChange={(e) => setAddress(e.target.value)}
+              onChange={(e) => { setAddress(e.target.value); setShowSaveForm(false); }}
               placeholder="Av. Pajaritos 1234, Dpto 5B"
               required
             />
@@ -180,7 +261,7 @@ export default function Checkout() {
             <select
               className={`form-select ${communeError ? 'is-invalid' : ''}`}
               value={commune}
-              onChange={(e) => setCommune(e.target.value)}
+              onChange={(e) => { setCommune(e.target.value); setShowSaveForm(false); }}
               required
             >
               <option value="">Selecciona tu comuna…</option>
@@ -195,6 +276,57 @@ export default function Checkout() {
               </div>
             )}
           </div>
+
+          {/* ── Guardar dirección ── */}
+          {address.trim() && commune && !communeError && (() => {
+            const alreadySaved = user?.savedAddresses?.some(
+              (sa) => sa.address === address.trim() && sa.commune === commune
+            );
+            if (alreadySaved) return null;
+            return (
+              <div className="mb-3">
+                {!showSaveForm ? (
+                  <button
+                    type="button"
+                    className="btn-save-address"
+                    onClick={() => { setSavingLabel(''); setShowSaveForm(true); }}
+                  >
+                    + Guardar esta dirección
+                  </button>
+                ) : (
+                  <div className="save-address-form">
+                    <input
+                      className="form-control form-control-sm"
+                      placeholder="Nombre (ej. Casa, Trabajo)"
+                      value={savingLabel}
+                      onChange={(e) => setSavingLabel(e.target.value)}
+                      maxLength={20}
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-primary"
+                      disabled={!savingLabel.trim()}
+                      onClick={() => {
+                        saveAddress({ label: savingLabel.trim(), address: address.trim(), commune });
+                        setShowSaveForm(false);
+                        setSavingLabel('');
+                      }}
+                    >
+                      Guardar
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-secondary"
+                      onClick={() => setShowSaveForm(false)}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           <div className="mb-3">
             <label className="form-label">Correo electrónico (boleta)</label>
@@ -225,6 +357,24 @@ export default function Checkout() {
 
           {payment === 'tarjeta' && (
             <div className="checkout-card-box">
+              <div className="checkout-demo-profiles">
+                <span className="checkout-demo-profiles__label">Perfiles demo:</span>
+                <button
+                  type="button"
+                  className={`checkout-profile-btn checkout-profile-btn--success${!willFail && card.number ? ' active' : ''}`}
+                  onClick={() => applyProfile('success')}
+                >
+                  Perfil de éxito
+                </button>
+                <button
+                  type="button"
+                  className={`checkout-profile-btn checkout-profile-btn--failure${willFail && card.number ? ' active' : ''}`}
+                  onClick={() => applyProfile('failure')}
+                >
+                  Perfil de fracaso
+                </button>
+              </div>
+
               <div className="checkout-card-brands" aria-label="Marcas disponibles">
                 <span className={`brand-pill ${detectedBrand === 'visa'       ? 'active' : ''}`}>VISA</span>
                 <span className={`brand-pill ${detectedBrand === 'mastercard' ? 'active' : ''}`}>Mastercard</span>
@@ -303,9 +453,9 @@ export default function Checkout() {
           <button
             className="btn btn-primary checkout-submit w-100"
             type="submit"
-            disabled={loading || !!communeError || !commune}
+            disabled={!!communeError || !commune}
           >
-            {loading ? 'Procesando pago…' : `Pagar $${totalPrice.toLocaleString('es-CL')}`}
+            {`Pagar $${totalPrice.toLocaleString('es-CL')}`}
           </button>
         </form>
 
