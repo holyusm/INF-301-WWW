@@ -5,7 +5,7 @@ import {
   useEffect,
   type ReactNode,
 } from 'react';
-import type { User } from '../types';
+import type { User, SavedAddress } from '../types';
 
 const USERS_KEY   = 'fukusuke_users';
 const SESSION_KEY = 'fukusuke_session';
@@ -132,6 +132,10 @@ export interface AuthContextValue {
   updateUser: (updated: User, newPassword?: string) => void;
   /** Admin: eliminar usuario (no permite eliminar al usuario actual) */
   deleteUser: (id: number) => void;
+  /** Guardar una nueva dirección en el perfil del usuario actual */
+  saveAddress: (addr: SavedAddress) => void;
+  /** Eliminar una dirección guardada por índice */
+  removeAddress: (index: number) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -225,6 +229,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     persist(storedUsers.filter((u) => u.id !== id));
   };
 
+  const saveAddress = (addr: SavedAddress) => {
+    if (!user) return;
+    const updated: User = {
+      ...user,
+      savedAddresses: [...(user.savedAddresses ?? []), addr],
+    };
+    updateUser(updated);
+  };
+
+  const removeAddress = (index: number) => {
+    if (!user) return;
+    const updated: User = {
+      ...user,
+      savedAddresses: (user.savedAddresses ?? []).filter((_, i) => i !== index),
+    };
+    updateUser(updated);
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -237,6 +259,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         addUser,
         updateUser,
         deleteUser,
+        saveAddress,
+        removeAddress,
       }}
     >
       {children}

@@ -16,6 +16,13 @@ export interface CartItem {
   quantity: number;
 }
 
+// ── Dirección guardada ─────────────────────────────────────
+export interface SavedAddress {
+  label: string;      // e.g. "Casa", "Trabajo"
+  address: string;
+  commune: string;
+}
+
 // ── Usuario / Cliente ──────────────────────────────────────
 export interface User {
   id: number;
@@ -30,6 +37,7 @@ export interface User {
   birthDate: string;
   gender: 'M' | 'F' | 'otro';
   role: 'cliente' | 'admin' | 'cajero' | 'despachador' | 'dueño';
+  savedAddresses?: SavedAddress[];
 }
 
 // ── Pedido ─────────────────────────────────────────────────
