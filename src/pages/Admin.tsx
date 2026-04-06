@@ -1,4 +1,16 @@
-import { useState, type ChangeEvent } from 'react';
+import { useState, useMemo, type ChangeEvent } from 'react';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+import { Bar } from 'react-chartjs-2';
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 import { PRODUCTS as INITIAL_PRODUCTS, CATEGORY_LABELS } from '../data/products';
 import { useOrders } from '../context/OrderContext';
 import { useAuth } from '../context/AuthContext';
@@ -90,14 +102,8 @@ export default function Admin() {
   const [userFormErrors, setUserFormErrors] = useState<Partial<UserFormState>>({});
   const [deleteUserId, setDeleteUserId]     = useState<number | null>(null);
 
-  // ── Reportes ──
-  const today = new Date();
-  const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
-    .toISOString().slice(0, 10);
-  const todayStr = today.toISOString().slice(0, 10);
-  const [reportFrom, setReportFrom] = useState(firstOfMonth);
-  const [reportTo,   setReportTo]   = useState(todayStr);
-  const [reportApplied, setReportApplied] = useState({ from: firstOfMonth, to: todayStr });
+  // ── Reportes: semana actual (offset 0 = esta semana, -1 = anterior, etc.) ──
+  const [weekOffset, setWeekOffset] = useState(0);
 
   // ─────────────────────────────────────────────────────────
   //  Helpers PRODUCTOS
@@ -229,19 +235,85 @@ export default function Admin() {
   // ─────────────────────────────────────────────────────────
   //  Helpers REPORTES
   // ─────────────────────────────────────────────────────────
-  const applyReport = () => setReportApplied({ from: reportFrom, to: reportTo });
 
-  const reportOrders = orders.filter((o) => {
+  // Lunes de la semana actual + weekOffset semanas
+  const weekDays = useMemo(() => {
+    const now = new Date();
+    const dayOfWeek = now.getDay(); // 0=Dom
+    const diffToMonday = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + diffToMonday + weekOffset * 7);
+    monday.setHours(0, 0, 0, 0);
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      return d;
+    });
+  }, [weekOffset]);
+
+  const weekLabel = useMemo(() => {
+    const fmt = (d: Date) => d.toLocaleDateString('es-CL', { day: '2-digit', month: 'short' });
+    return `${fmt(weekDays[0])} – ${fmt(weekDays[6])}`;
+  }, [weekDays]);
+
+  const DAY_NAMES = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+
+  const reportOrders = useMemo(() => orders.filter((o) => {
     if (o.status === 'anulado') return false;
     const d = new Date(o.createdAt);
-    return (
-      d >= new Date(reportApplied.from + 'T00:00:00') &&
-      d <= new Date(reportApplied.to   + 'T23:59:59')
-    );
-  });
+    const start = weekDays[0];
+    const end   = new Date(weekDays[6]); end.setHours(23, 59, 59, 999);
+    return d >= start && d <= end;
+  }), [orders, weekDays]);
 
   const totalSales = reportOrders.reduce((acc, o) => acc + o.total, 0);
   const avgTicket  = reportOrders.length ? Math.round(totalSales / reportOrders.length) : 0;
+
+  // ── Chart data: siempre 7 barras (Lun–Dom) ──
+  const chartData = useMemo(() => {
+    const salesByDay = weekDays.map((day) => {
+      const dayStart = new Date(day); dayStart.setHours(0, 0, 0, 0);
+      const dayEnd   = new Date(day); dayEnd.setHours(23, 59, 59, 999);
+      return reportOrders
+        .filter((o) => { const d = new Date(o.createdAt); return d >= dayStart && d <= dayEnd; })
+        .reduce((acc, o) => acc + o.total, 0);
+    });
+    return {
+      labels: DAY_NAMES,
+      datasets: [{
+        label: 'Ventas ($)',
+        data: salesByDay,
+        backgroundColor: salesByDay.map((v) =>
+          v > 0 ? 'rgba(185, 43, 39, 0.80)' : 'rgba(185, 43, 39, 0.18)'
+        ),
+        borderColor: 'rgba(185, 43, 39, 1)',
+        borderWidth: 1.5,
+        borderRadius: 6,
+      }],
+    };
+  }, [reportOrders, weekDays]);
+
+  const chartOptions = {
+    responsive: true,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: (ctx: { parsed: { y: number } }) =>
+            ctx.parsed.y > 0 ? ` $${ctx.parsed.y.toLocaleString('es-CL')}` : ' Sin ventas',
+        },
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        ticks: {
+          callback: (value: number | string) =>
+            Number(value) === 0 ? '$0' : `$${Number(value).toLocaleString('es-CL')}`,
+        },
+      },
+    },
+  } as const;
 
   // ─────────────────────────────────────────────────────────
   //  Render
@@ -617,23 +689,25 @@ export default function Admin() {
         <section className="admin-section">
           <h2>Reporte de ventas</h2>
 
-          <div className="report-filters card border-0 shadow-sm">
-            <div>
-              <label className="form-label">Desde</label>
-              <input className="form-control" type="date" value={reportFrom}
-                onChange={(e) => setReportFrom(e.target.value)} />
-            </div>
-            <div>
-              <label className="form-label">Hasta</label>
-              <input className="form-control" type="date" value={reportTo}
-                onChange={(e) => setReportTo(e.target.value)} />
-            </div>
-            <button className="btn btn-primary" style={{ alignSelf: 'flex-end' }}
-              onClick={applyReport}>
-              Buscar
+          {/* ── Navegación de semana ── */}
+          <div className="report-week-nav card border-0 shadow-sm">
+            <button
+              className="btn btn-outline-secondary btn-sm"
+              onClick={() => setWeekOffset((w) => w - 1)}
+            >
+              ‹ Semana anterior
+            </button>
+            <span className="report-week-label">{weekLabel}</span>
+            <button
+              className="btn btn-outline-secondary btn-sm"
+              disabled={weekOffset >= 0}
+              onClick={() => setWeekOffset((w) => w + 1)}
+            >
+              Semana siguiente ›
             </button>
           </div>
 
+          {/* ── KPIs ── */}
           <div className="report-summary">
             <div className="report-kpi card border-0 shadow-sm">
               <span>Ventas totales</span>
@@ -649,6 +723,13 @@ export default function Admin() {
             </div>
           </div>
 
+          {/* ── Gráfico siempre visible ── */}
+          <div className="card border-0 shadow-sm report-chart-wrap">
+            <h3 className="report-chart-title">Ventas por día</h3>
+            <Bar data={chartData} options={chartOptions} />
+          </div>
+
+          {/* ── Tabla de pedidos ── */}
           {reportOrders.length > 0 ? (
             <div className="admin-table-wrap card border-0 shadow-sm" style={{ marginTop: '1.5rem' }}>
               <table className="admin-table table table-hover align-middle mb-0">
@@ -677,10 +758,7 @@ export default function Admin() {
               </table>
             </div>
           ) : (
-            <div className="admin-placeholder card border-0 shadow-sm" style={{ marginTop: '1.5rem' }}>
-              <span>📊</span>
-              <p>No hay ventas en el período seleccionado.</p>
-            </div>
+            <p className="report-no-orders">Sin pedidos esta semana.</p>
           )}
         </section>
       )}

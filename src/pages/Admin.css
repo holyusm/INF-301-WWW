@@ -124,19 +124,27 @@
 .admin-placeholder .hint { font-size: 0.85rem; }
 
 /* Report */
-.report-filters {
+.report-week-nav {
   display: flex;
-  gap: 1.5rem;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  margin-bottom: 2rem;
-  background: var(--color-surface);
-  padding: 1.2rem 1.5rem;
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1.2rem;
+  margin-bottom: 1.5rem;
 }
 
-.report-filters .form-group { margin-bottom: 0; }
+.report-week-label {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--color-secondary);
+}
+
+.report-no-orders {
+  margin-top: 1.2rem;
+  color: var(--color-text-light);
+  font-size: 0.9rem;
+  text-align: center;
+}
 
 .report-summary {
   display: grid;
@@ -162,6 +170,18 @@
 .report-kpi strong {
   font-size: 1.8rem;
   color: var(--color-secondary);
+}
+
+.report-chart-wrap {
+  margin-top: 1.5rem;
+  padding: 1.5rem 1.5rem 1rem;
+}
+
+.report-chart-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-secondary);
+  margin-bottom: 1rem;
 }
 
 @media (max-width: 768px) {
