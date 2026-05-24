@@ -1,5 +1,453 @@
 # Diseño de Microservicios — Fukusuke BackEnd
 
+> Documento actualizado el 2026-05-24. Refleja el código real en la rama `main` (commit base `457f919`).
+
+---
+
+## 0. Descripción Técnica del Backend (código real)
+
+Esta sección documenta el backend tal como está implementado actualmente en el repositorio, incluyendo todas las entidades, endpoints, DTOs, servicios y patrones de diseño reales.
+
+### 0.1 Stack y configuración global
+
+| Aspecto | Valor |
+|---|---|
+| Framework | NestJS 11 |
+| Runtime | Node.js ≥ 20 |
+| Base de datos | PostgreSQL vía TypeORM 0.3 |
+| Prefijo global | `/api` |
+| Documentación | `/docs` (Swagger / OpenAPI) |
+| Puerto | `process.env.PORT` o `3000` |
+| Validación global | `ValidationPipe({ whitelist: true, transform: true })` |
+| CORS | Habilitado para todos los orígenes |
+
+### 0.2 Variables de entorno requeridas
+
+| Variable | Descripción |
+|---|---|
+| `DATABASE_URL` | URL de conexión a PostgreSQL |
+| `JWT_SECRET` | Clave secreta para firmar tokens JWT (default: `fukusuke-secret`) |
+| `JWT_EXPIRES_IN` | Duración del token (default: `7d`) |
+| `NODE_ENV` | `production` activa SSL y desactiva `synchronize` |
+
+### 0.3 Módulo raíz (`app.module.ts`)
+
+```
+AppModule
+ ├── ConfigModule (global)
+ ├── EventEmitterModule
+ ├── TypeOrmModule (async, PostgreSQL, autoLoadEntities, synchronize en dev, SSL en prod)
+ └── [AuthModule, UsersModule, ProductsModule, CartModule,
+      OrdersModule, PaymentsModule, NotificationsModule, ReportsModule]
+```
+
+---
+
+### 0.4 Módulo Auth (`src/auth/`)
+
+**Entidades:**
+
+`credentials` — credenciales de acceso
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `id` | uuid PK | Identificador |
+| `email` | string unique | Correo electrónico |
+| `passwordHash` | string select:false | Hash bcrypt |
+| `role` | enum UserRole | Rol del usuario |
+| `active` | boolean | Cuenta habilitada |
+| `userId` | string | Referencia lógica al `UserProfile.id` |
+| `createdAt` | timestamp | Fecha de creación |
+
+**Roles disponibles:** `cliente | admin | cajero | despachador | dueno`
+
+**Endpoints:**
+
+| Método | Ruta | Auth | Descripción |
+|---|---|---|---|
+| `POST` | `/api/auth/register` | — | Registro; devuelve usuario + JWT |
+| `POST` | `/api/auth/login` | — | Login; devuelve usuario + JWT |
+| `GET` | `/api/auth/profile` | JWT | Perfil del usuario autenticado |
+
+**JWT payload:** `{ sub: userId, role, email }` — mapeado a `req.user = { id, email, role }`.
+
+**Flujo de registro:** verifica unicidad de email y RUN → persiste `UserProfile` → hashea contraseña (bcrypt salt 10) → persiste `Credential` → retorna usuario combinado + token.
+
+**Guards y decoradores exportados:** `JwtAuthGuard`, `RolesGuard`, `@Roles(...)`.
+
+---
+
+### 0.5 Módulo Users (`src/users/`)
+
+**Entidades:**
+
+`user_profiles` — datos personales del usuario
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `id` | uuid PK | Compartido con `credentials.userId` |
+| `run` | string unique | RUT chileno |
+| `fullName` | string | Nombre completo |
+| `phone` | string | Teléfono |
+| `address` | string | Dirección principal |
+| `commune` | string | Comuna |
+| `province` | string | Provincia |
+| `region` | string | Región |
+| `birthDate` | string nullable | Fecha de nacimiento (ISO) |
+| `gender` | enum M/F/otro | Género |
+| `createdAt` | timestamp | Fecha de creación |
+
+`saved_addresses` — direcciones de despacho guardadas
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `id` | uuid PK | Identificador |
+| `userId` | string | Referencia al `UserProfile.id` |
+| `label` | string | Etiqueta (ej.: "Casa") |
+| `address` | string | Dirección completa |
+| `commune` | string | Comuna |
+| `createdAt` | timestamp | Fecha de creación |
+
+**Endpoints (todos requieren JWT):**
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `GET` | `/api/users/profile` | Perfil del usuario autenticado |
+| `PUT` | `/api/users/profile` | Actualiza datos del perfil |
+| `GET` | `/api/users/addresses` | Lista direcciones guardadas |
+| `POST` | `/api/users/addresses` | Agrega una dirección |
+| `DELETE` | `/api/users/addresses/:id` | Elimina una dirección (solo propietario) |
+
+---
+
+### 0.6 Módulo Products (`src/products/`)
+
+**Entidades:**
+
+`categories`
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `id` | uuid PK | Identificador |
+| `name` | string unique | Nombre legible (ej.: "Rolls") |
+| `slug` | string unique | Identificador URL (ej.: `rolls`) |
+
+Categorías seed: `rolls`, `nigiris`, `temakis`, `combos`, `bebidas`.
+
+`products`
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `id` | uuid PK | Identificador |
+| `name` | string | Nombre |
+| `description` | text | Descripción |
+| `price` | numeric(10,0) | Precio en CLP |
+| `available` | boolean | Disponible para venta |
+| `featured` | boolean | Producto destacado |
+| `imageUrl` | string nullable | URL de imagen |
+| `category` | ManyToOne → Category | Categoría (eager) |
+| `createdAt` | timestamp | Creación |
+| `updatedAt` | timestamp | Última actualización |
+
+**Endpoints:**
+
+| Método | Ruta | Auth / Roles | Descripción |
+|---|---|---|---|
+| `GET` | `/api/products` | — | Lista todos; acepta `?category=<slug>` |
+| `GET` | `/api/products/:id` | — | Detalle de un producto |
+| `POST` | `/api/products` | JWT + admin/dueno | Crea un producto |
+| `PUT` | `/api/products/:id` | JWT + admin/dueno | Actualiza un producto |
+| `PATCH` | `/api/products/:id/availability` | JWT + admin/cajero/dueno | Cambia disponibilidad |
+
+---
+
+### 0.7 Módulo Cart (`src/cart/`)
+
+**Entidades:**
+
+`carts`
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `id` | uuid PK | Identificador |
+| `userId` | string unique | Un carrito por usuario |
+| `items` | OneToMany → CartItem | Ítems (cascade, eager) |
+| `updatedAt` | timestamp | Última modificación |
+
+`cart_items`
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `id` | uuid PK | Identificador |
+| `productId` | string | ID del producto |
+| `productName` | string | Nombre al momento de agregar |
+| `unitPrice` | numeric(10,0) | Precio unitario al momento de agregar |
+| `quantity` | int | Cantidad |
+| `cart` | ManyToOne → Cart | Carrito padre (cascade delete) |
+
+**Endpoints (todos requieren JWT):**
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `GET` | `/api/cart` | Carrito + total calculado |
+| `POST` | `/api/cart/items` | Agrega ítem (o incrementa cantidad) |
+| `PUT` | `/api/cart/items/:productId` | Actualiza cantidad (quantity ≤ 0 elimina) |
+| `DELETE` | `/api/cart/items/:productId` | Elimina un ítem |
+| `DELETE` | `/api/cart` | Vacía el carrito |
+
+**Respuesta:** `{ cart: {...}, total: number }`. El total se calcula en memoria en `CartService.calculateTotal()`.
+
+---
+
+### 0.8 Módulo Orders (`src/orders/`)
+
+**Entidades:**
+
+`orders`
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `id` | uuid PK | Identificador |
+| `userId` | string | Usuario propietario |
+| `status` | enum OrderStatus | Estado actual |
+| `total` | numeric(10,0) | Total en CLP |
+| `deliveryAddress` | string | Dirección de entrega |
+| `paymentMethod` | string nullable | Método de pago |
+| `cancelReason` | string nullable | Motivo de anulación |
+| `items` | OneToMany → OrderItem | Ítems (cascade, eager) |
+| `createdAt` / `updatedAt` | timestamp | Fechas |
+
+`order_items`
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `id` | uuid PK | Identificador |
+| `productId` | string | ID del producto |
+| `productName` | string | Nombre al momento del pedido |
+| `unitPrice` | numeric(10,0) | Precio unitario histórico |
+| `quantity` | int | Cantidad |
+| `order` | ManyToOne → Order | Pedido padre (cascade delete) |
+
+**Máquina de estados:**
+
+```
+pendiente → pagado → preparando → en_camino → entregado
+pendiente → anulado
+```
+
+| Estado actual | Siguientes permitidos |
+|---|---|
+| `pendiente` | `pagado`, `anulado` |
+| `pagado` | `preparando` |
+| `preparando` | `en_camino` |
+| `en_camino` | `entregado` |
+| `entregado` | _(ninguna)_ |
+| `anulado` | _(ninguna)_ |
+
+**Control de roles para cambio de estado:**
+
+| Rol | Puede transicionar a |
+|---|---|
+| `admin` / `dueno` | Cualquier transición válida |
+| `cajero` | `pagado` |
+| `despachador` | `en_camino`, `entregado` |
+
+**Endpoints:**
+
+| Método | Ruta | Auth / Roles | Descripción |
+|---|---|---|---|
+| `POST` | `/api/orders` | JWT | Crea un pedido (opcionalmente lo paga en el mismo request) |
+| `GET` | `/api/orders` | JWT + admin/cajero/dueno | Lista todos los pedidos |
+| `GET` | `/api/orders/my` | JWT | Pedidos del usuario autenticado |
+| `GET` | `/api/orders/:id` | JWT | Detalle de un pedido |
+| `PATCH` | `/api/orders/:id/status` | JWT | Cambia estado (con validación de roles y máquina de estados) |
+| `DELETE` | `/api/orders/:id` | JWT + admin | Elimina un pedido (solo si está en `pendiente`) |
+
+**Flujo de creación con pago inline:** si `CreateOrderDto` incluye `paymentData`, el servicio crea el pedido en `pendiente`, emite `order.created`, llama a `PaymentsService.processPayment()` y si el resultado es `aprobado` actualiza a `pagado` y emite `order.paid`.
+
+**Eventos emitidos:**
+
+| Evento | Payload | Cuándo |
+|---|---|---|
+| `order.created` | `{ orderId, userId, total }` | Al crear el pedido |
+| `order.paid` | `{ orderId, userId, amount }` | Al pasar a `pagado` |
+| `order.status_changed` | `{ orderId, userId, newStatus, previousStatus }` | Cualquier cambio excepto anulación |
+| `order.cancelled` | `{ orderId, userId, reason, previousStatus }` | Al anular |
+
+---
+
+### 0.9 Módulo Payments (`src/payments/`)
+
+**Entidades:**
+
+`payments`
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `id` | uuid PK | Identificador |
+| `orderId` | string | Referencia al pedido |
+| `amount` | numeric(10,0) | Monto cobrado |
+| `status` | enum PaymentStatus | `procesando` / `aprobado` / `rechazado` |
+| `methodType` | string | `tarjeta` / `servipag` / `transferencia` |
+| `transactionId` | string nullable | ID de transacción externo |
+| `errorMessage` | string nullable | Mensaje de error si fue rechazado |
+| `processedAt` | timestamp | Fecha de procesamiento |
+
+**Strategy Pattern — jerarquía `PaymentMethod`:**
+
+```
+PaymentMethod (abstract)
+  ├─ CreditCardPayment   (type: 'tarjeta')     — valida cardNumber + expiryDate
+  ├─ ServipagPayment     (type: 'servipag')    — valida cardNumber + expiryDate
+  └─ BankTransferPayment (type: 'transferencia') — valida bankName + accountNumber
+```
+
+Cada estrategia implementa `validate(): boolean` y `process(amount): Promise<PaymentResult>`.
+
+**Flujo:** `buildPaymentMethod(dto)` instancia la estrategia → `validate()` → `process(amount)` → persiste resultado como `Payment`.
+
+**Endpoints:**
+
+| Método | Ruta | Auth | Descripción |
+|---|---|---|---|
+| `POST` | `/api/payments/process` | JWT | Procesa un pago |
+| `GET` | `/api/payments/order/:orderId` | JWT | Pago asociado a un pedido |
+
+---
+
+### 0.10 Módulo Notifications (`src/notifications/`)
+
+**Entidades:**
+
+`notifications`
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `id` | uuid PK | Identificador |
+| `userId` | string | Destinatario |
+| `type` | enum NotificationType | Tipo de notificación |
+| `message` | text | Texto legible |
+| `read` | boolean | Leída (default: false) |
+| `createdAt` | timestamp | Fecha de creación |
+
+**Tipos:** `order_confirmed` / `order_status_changed` / `order_cancelled`
+
+**Listeners de eventos:**
+
+| Evento | Acción |
+|---|---|
+| `order.created` | Crea notificación `order_confirmed` |
+| `order.status_changed` | Crea notificación `order_status_changed` |
+| `order.cancelled` | Crea notificación `order_cancelled` |
+
+**Endpoints (todos requieren JWT):**
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `GET` | `/api/notifications` | Últimas 50 notificaciones del usuario |
+| `PATCH` | `/api/notifications/read-all` | Marca todas como leídas |
+| `PATCH` | `/api/notifications/:id/read` | Marca una como leída |
+
+---
+
+### 0.11 Módulo Reports (`src/reports/`)
+
+**Entidades:**
+
+`weekly_reports`
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `id` | uuid PK | Identificador |
+| `weekId` | string unique | ID semana ISO (ej.: `2026-W21`) |
+| `totalRevenue` | numeric(12,0) | Ingresos totales de la semana |
+| `totalOrders` | int | Cantidad de pedidos |
+| `dailySales` | OneToMany → DailySales | Desglose diario (eager) |
+| `generatedAt` / `updatedAt` | timestamp | Fechas |
+
+`daily_sales`
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `id` | uuid PK | Identificador |
+| `date` | date | Fecha `YYYY-MM-DD` |
+| `revenue` | numeric(12,0) | Ingresos del día |
+| `orderCount` | int | Pedidos del día |
+| `avgOrderValue` | numeric(10,2) | Ticket promedio |
+| `weeklyReport` | ManyToOne → WeeklyReport | Reporte padre (cascade delete) |
+
+**Listener:** `order.paid` → `registerSale(amount)` para la fecha actual.
+
+**Flujo `registerSale`:** calcula weekId ISO → busca/crea `WeeklyReport` → busca/crea `DailySales` para esa fecha → actualiza revenue, orderCount, avgOrderValue diarios → actualiza totalRevenue y totalOrders semanales → persiste.
+
+**Endpoints (requieren JWT + admin/dueno):**
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `GET` | `/api/reports/current` | Reporte de la semana actual |
+| `GET` | `/api/reports/recent?n=4` | Las n semanas más recientes |
+| `GET` | `/api/reports/:weekId` | Reporte de una semana específica |
+| `POST` | `/api/reports/register-sale` | Registra manualmente una venta |
+
+---
+
+### 0.12 Diagrama de flujo completo de un pedido pagado
+
+```
+Cliente
+  │
+  ├─ POST /api/orders  (con paymentData)
+  │    │
+  │    ├─ OrdersService.createOrder()
+  │    │    ├─ Persiste Order (status: pendiente)
+  │    │    ├─ emit('order.created') ──────────────→ NotificationsService
+  │    │    │                                              → notificación order_confirmed
+  │    │    ├─ PaymentsService.processPayment()
+  │    │    │    └─ Strategy.process() → Payment(aprobado)
+  │    │    ├─ Order.status = pagado
+  │    │    └─ emit('order.paid') ────────────────→ ReportsService
+  │    │                                                 → registerSale(amount)
+  │    └─ Devuelve Order
+```
+
+---
+
+### 0.13 Matriz de acceso por rol
+
+| Endpoint | cliente | cajero | despachador | admin | dueno |
+|---|---|---|---|---|---|
+| `POST /auth/register` | si | si | si | si | si |
+| `POST /auth/login` | si | si | si | si | si |
+| `GET /products` | si | si | si | si | si |
+| `POST /products` | no | no | no | si | si |
+| `PATCH /products/:id/availability` | no | si | no | si | si |
+| `POST /orders` | si | si | si | si | si |
+| `GET /orders` (todos) | no | si | no | si | si |
+| `PATCH /orders/:id/status` → `pagado` | no | si | no | si | si |
+| `PATCH /orders/:id/status` → `en_camino`/`entregado` | no | no | si | si | si |
+| `DELETE /orders/:id` | no | no | no | si | no |
+| `GET /reports/*` | no | no | no | si | si |
+
+---
+
+### 0.14 Stack tecnológico completo
+
+| Tecnología | Versión | Uso |
+|---|---|---|
+| Node.js | ≥ 20.0.0 | Runtime |
+| NestJS | ^11.0.1 | Framework principal |
+| TypeORM | ^0.3.28 | ORM |
+| PostgreSQL | — | Base de datos |
+| `@nestjs/jwt` | ^11.0.2 | Generación y verificación de JWT |
+| `passport-jwt` | ^4.0.1 | Estrategia de extracción de token |
+| `bcrypt` | ^6.0.0 | Hash de contraseñas |
+| `class-validator` | ^0.15.1 | Validación de DTOs |
+| `class-transformer` | ^0.5.1 | Transformación de DTOs |
+| `@nestjs/event-emitter` | ^3.1.0 | Comunicación asíncrona entre módulos |
+| `@nestjs/swagger` | ^11.4.4 | Documentación OpenAPI |
+| TypeScript | ^5.7.3 | Lenguaje |
+| Jest | ^30.0.0 | Testing unitario |
+
 ---
 
 ## 1. Diagrama de Clases con los Microservicios
@@ -47,18 +495,11 @@ flowchart TD
         REPORT[report-service]
     end
 
-    subgraph Databases["Bases de Datos Independientes"]
-        DB_AUTH[(auth_db)]
-        DB_USER[(user_db)]
-        DB_PROD[(prod_db)]
-        DB_CART[(cart_db)]
-        DB_ORDER[(order_db)]
-        DB_PAY[(pay_db)]
-        DB_NOTIF[(notif_db)]
-        DB_REPORT[(report_db)]
+    subgraph DB["Base de Datos (PostgreSQL compartida — tablas separadas por servicio)"]
+        DB_ALL[(credentials · user_profiles · saved_addresses\nproducts · categories · carts · cart_items\norders · order_items · payments\nnotifications · weekly_reports · daily_sales)]
     end
 
-    subgraph Events["Comunicación Asíncrona"]
+    subgraph Events["Comunicación Asíncrona (@nestjs/event-emitter)"]
         MB[[Bus de Eventos]]
     end
 
@@ -69,21 +510,27 @@ flowchart TD
     AG -->|REST| CART
     AG -->|REST| ORDER
 
-    ORDER -->|REST sync| PAY
-    ORDER -->|evento: order.created| MB
-    ORDER -->|evento: order.status_changed| MB
-    MB -->|escucha| NOTIF
-    MB -->|escucha| REPORT
+    ORDER -->|REST sync: paymentData opcional| PAY
+    ORDER -->|order.created| MB
+    ORDER -->|order.status_changed| MB
+    ORDER -->|order.paid| MB
+    ORDER -->|order.cancelled| MB
+    MB -->|@OnEvent: order.created / status_changed / cancelled| NOTIF
+    MB -->|@OnEvent: order.paid| REPORT
 
-    AUTH --- DB_AUTH
-    USER --- DB_USER
-    PROD --- DB_PROD
-    CART --- DB_CART
-    ORDER --- DB_ORDER
-    PAY --- DB_PAY
-    NOTIF --- DB_NOTIF
-    REPORT --- DB_REPORT
+    AUTH --- DB_ALL
+    USER --- DB_ALL
+    PROD --- DB_ALL
+    CART --- DB_ALL
+    ORDER --- DB_ALL
+    PAY --- DB_ALL
+    NOTIF --- DB_ALL
+    REPORT --- DB_ALL
 ```
+
+> **Nota sobre el API Gateway:** En esta implementación el "API Gateway" es lógico — corresponde al prefijo global `/api` de NestJS más `JwtAuthGuard` aplicado por controlador. Un despliegue distribuido real requeriría un gateway dedicado (NGINX, Kong, Traefik), lo que está documentado como evolución futura.
+
+> **Nota sobre la base de datos:** Todos los módulos comparten una conexión PostgreSQL única. La separación es real a nivel de tablas: cada módulo registra sus propias entidades vía `TypeOrmModule.forFeature([...])` y ningún servicio consulta tablas de otro módulo. La estrategia Database per Service se aplica como separación lógica.
 
 ---
 
@@ -95,15 +542,27 @@ Este diagrama muestra todas las clases principales del sistema, sus atributos, m
 classDiagram
     direction TB
 
-    class User {
+    class Credential {
+        +UUID id
+        +String email
+        +String passwordHash
+        +UserRole role
+        +Boolean active
+        +UUID userId
+        +Date createdAt
+    }
+
+    class UserProfile {
         +UUID id
         +String run
         +String fullName
-        +String email
-        +String passwordHash
         +String phone
-        +UserRole role
-        +Boolean active
+        +String address
+        +String commune
+        +String province
+        +String region
+        +String birthDate
+        +UserGender gender
         +Date createdAt
     }
 
@@ -114,6 +573,13 @@ classDiagram
         CAJERO
         DESPACHADOR
         DUENO
+    }
+
+    class UserGender {
+        <<enumeration>>
+        M
+        F
+        OTRO
     }
 
     class SavedAddress {
@@ -249,8 +715,10 @@ classDiagram
         +Number avgOrderValue
     }
 
-    User "1" --> "1" UserRole : tiene rol
-    User "1" o-- "0..*" SavedAddress : agrega
+    Credential "1" --> "1" UserRole : tiene rol
+    Credential "1" --> "1" UserProfile : referencia lógica por userId
+    UserProfile "1" --> "1" UserGender : tiene género
+    UserProfile "1" o-- "0..*" SavedAddress : agrega
     Product "1" --> "1" Category : pertenece a
     Cart "1" *-- "1..*" CartItem : compone
     Order "1" *-- "1..*" OrderItem : compone
@@ -305,6 +773,8 @@ classDiagram
     Repository --> Entity : persiste
 ```
 
+> **Nota sobre la capa Repository:** En la implementación, el rol Repository lo cumple el `Repository<Entity>` genérico de TypeORM, inyectado mediante `@InjectRepository(Entity)`. Los nombres `ProductRepository`, `OrderRepository`, etc., en los diagramas internos representan ese rol arquitectónico, no una clase custom. Algunos diagramas omiten esta capa por claridad y muestran la relación directa entre el Service y la entidad.
+
 ---
 
 ### 1.5 Diagrama Interno — auth-service
@@ -320,27 +790,31 @@ classDiagram
     class AuthService {
         +register(dto) TokenResponse
         +login(dto) TokenResponse
-        +getMe(userId) User
-        +hashPassword(raw) String
+        +getMe(userId) ProfileData
     }
 
-    class AuthRepository {
-        +findByEmail(email) User
-        +findById(id) User
-        +findByRun(run) User
-        +create(user) User
-        +save(user) User
+    class Credential {
+        +UUID id
+        +String email
+        +String passwordHash
+        +UserRole role
+        +Boolean active
+        +UUID userId
+        +Date createdAt
     }
 
-    class User {
+    class UserProfile {
         +UUID id
         +String run
         +String fullName
-        +String email
-        +String passwordHash
         +String phone
-        +UserRole role
-        +Boolean active
+        +String address
+        +String commune
+        +String province
+        +String region
+        +String birthDate
+        +UserGender gender
+        +Date createdAt
     }
 
     class LoginDTO {
@@ -360,12 +834,13 @@ classDiagram
 
     class JwtToken {
         +String accessToken
-        +Number expiresIn
+        +String role
+        +String email
     }
 
     AuthController --> AuthService : usa
-    AuthService --> AuthRepository : usa
-    AuthRepository --> User : persiste
+    AuthService --> Credential : persiste credenciales
+    AuthService --> UserProfile : persiste perfil en registro
     AuthService ..> JwtToken : genera
     AuthController ..> LoginDTO : recibe
     AuthController ..> RegisterDTO : recibe
@@ -386,33 +861,25 @@ classDiagram
     }
 
     class UserService {
-        +getUserById(id) User
-        +updateProfile(id, dto) User
+        +getUserById(id) UserProfile
+        +updateProfile(id, dto) UserProfile
         +getAddresses(userId) SavedAddress[]
         +addAddress(userId, dto) SavedAddress
         +removeAddress(userId, addressId) void
     }
 
-    class UserRepository {
-        +findById(id) User
-        +save(user) User
-    }
-
-    class AddressRepository {
-        +findByUserId(userId) SavedAddress[]
-        +create(address) SavedAddress
-        +findOne(filter) SavedAddress
-        +remove(address) void
-    }
-
-    class User {
+    class UserProfile {
         +UUID id
+        +String run
         +String fullName
-        +String email
         +String phone
         +String address
         +String commune
-        +UserRole role
+        +String province
+        +String region
+        +String birthDate
+        +UserGender gender
+        +Date createdAt
     }
 
     class SavedAddress {
@@ -424,11 +891,9 @@ classDiagram
     }
 
     UserController --> UserService : usa
-    UserService --> UserRepository : usa
-    UserService --> AddressRepository : usa
-    UserRepository --> User : persiste
-    AddressRepository --> SavedAddress : persiste
-    User "1" o-- "0..*" SavedAddress : agrega
+    UserService --> UserProfile : persiste perfil
+    UserService --> SavedAddress : persiste direcciones
+    UserProfile "1" o-- "0..*" SavedAddress : agrega
 ```
 
 ---
@@ -562,15 +1027,16 @@ classDiagram
         +getAllOrders() Order[]
         +updateStatus(id, dto, role) Order
         +deleteOrder(id) void
-        +canTransitionTo(current, next) Boolean
     }
 
-    class OrderRepository {
-        +create(data) Order
-        +save(order) Order
-        +findOne(filter) Order
-        +find(filter) Order[]
-        +remove(order) void
+    class EventEmitter2 {
+        <<Infraestructura>>
+        +emit(event, payload) void
+    }
+
+    class PaymentsService {
+        <<payment-service>>
+        +processPayment(dto) Payment
     }
 
     class Order {
@@ -604,8 +1070,9 @@ classDiagram
     }
 
     OrderController --> OrderService : usa
-    OrderService --> OrderRepository : usa
-    OrderRepository --> Order : persiste
+    OrderService --> EventEmitter2 : emite order.created / order.paid / order.status_changed / order.cancelled
+    OrderService --> PaymentsService : llama síncronamente si hay paymentData
+    OrderService --> Order : persiste
     Order "1" *-- "1..*" OrderItem : compone
     Order "1" --> "1" OrderStatus : tiene estado
 ```
@@ -706,6 +1173,9 @@ classDiagram
         +notifyOrderConfirmed(userId, orderId) void
         +notifyStatusChanged(userId, orderId, status) void
         +notifyOrderCancelled(userId, orderId, reason) void
+        +handleOrderCreated(payload) void
+        +handleOrderStatusChanged(payload) void
+        +handleOrderCancelled(payload) void
     }
 
     class NotificationRepository {
@@ -756,6 +1226,7 @@ classDiagram
         +getWeekReport(weekId) WeeklyReport
         +registerSale(amount, date?) void
         +getRecentWeeks(n) WeeklyReport[]
+        +handleOrderPaid(payload) void
     }
 
     class ReportRepository {
@@ -807,7 +1278,7 @@ La agregación se usa cuando el objeto "hijo" puede existir de manera independie
 
 | Relación | Justificación |
 |---|---|
-| `User` ◇── `SavedAddress` | Las direcciones de despacho son entidades con vida propia: el usuario puede agregar, editar o eliminar cada una por separado. El usuario puede tener cero o varias, y estas se gestionan de forma independiente. |
+| `UserProfile` ◇── `SavedAddress` | Las direcciones de despacho son entidades con vida propia: el usuario puede agregar, editar o eliminar cada una por separado. El usuario puede tener cero o varias, y estas se gestionan de forma independiente. La asociación se implementa mediante el campo `userId` (UUID) en `SavedAddress`, sin clave foránea TypeORM, para mantener la independencia entre módulos. |
 
 ### 2.3 Herencia ◁
 
@@ -904,8 +1375,8 @@ Todos los microservicios implementados siguen la misma estructura interna. Se el
 ### 4.2 Ejemplo concreto — order-service
 
 - **`OrderController`**: recibe `POST /orders` con el JWT del usuario en el header, extrae el `userId` del token y pasa el DTO al servicio. Si el pedido se crea correctamente, responde con HTTP 201. Si hay un error de validación, responde con 400.
-- **`OrderService`**: contiene la lógica de la máquina de estados. Verifica que la transición solicitada es válida (por ejemplo, no se puede pasar de ENTREGADO a PREPARANDO), aplica restricciones por rol (el cajero solo puede marcar como PAGADO) y guarda el cambio.
-- **`OrderRepository`**: abstrae las consultas TypeORM. El servicio llama `findOne()`, `save()` o `find()` sin escribir SQL directamente.
+- **`OrderService`**: contiene la lógica de la máquina de estados. Verifica que la transición solicitada es válida (por ejemplo, no se puede pasar de ENTREGADO a PREPARANDO), aplica restricciones por rol (el cajero solo puede marcar como PAGADO), guarda el cambio, emite eventos al bus y — si el DTO incluye `paymentData` — llama a `PaymentsService.processPayment()` de forma síncrona.
+- **Repositorio (TypeORM)**: el rol Repository se cumple mediante el `Repository<Order>` genérico inyectado con `@InjectRepository(Order)`. El servicio llama `findOne()`, `save()` o `find()` sin escribir SQL directamente.
 - **`Order` / `OrderItem`**: entidades TypeORM que definen la estructura de las tablas y el método `getSubtotal()` en `OrderItem`.
 
 ### 4.3 Alternativas de estructura descartadas
@@ -979,8 +1450,10 @@ flowchart LR
     ORDER -->|sync REST: procesar pago| PAY
     ORDER -->|async: order.created| MB
     ORDER -->|async: order.status_changed| MB
-    MB -->|suscripción| NOTIF
-    MB -->|suscripción| REPORT
+    ORDER -->|async: order.paid| MB
+    ORDER -->|async: order.cancelled| MB
+    MB -->|order.created / status_changed / cancelled| NOTIF
+    MB -->|order.paid| REPORT
 ```
 
 > `order-service` no llama directamente a `product-service` ni a `cart-service` porque el cliente envía los datos del carrito en el cuerpo de la petición al crear el pedido. Esto elimina dependencias innecesarias.
@@ -1033,7 +1506,7 @@ flowchart LR
 
 **Selección:** Se selecciona la Alternativa B.
 
-**Justificación:** Cada servicio tiene mayor cohesión porque solo contiene lo que le corresponde. Reduce el acoplamiento: `auth-service` puede tener alta disponibilidad sin depender de `user-service`. A futuro, si se quiere integrar otra aplicación con el sistema de autenticación de Fukusuke, se puede reutilizar `auth-service` de forma aislada.
+**Justificación:** Cada servicio tiene mayor cohesión porque solo contiene lo que le corresponde. En la implementación concreta, `auth-service` gestiona la entidad `Credential` (tabla `credentials`: `email`, `passwordHash`, `role`, `active`, `userId`) y `user-service` gestiona la entidad `UserProfile` (tabla `user_profiles`: `run`, `fullName`, `phone`, `address`, `commune`, `province`, `region`, `birthDate`, `gender`). Ningún módulo importa entidades del otro. La vinculación entre perfil y credencial se realiza mediante el campo `userId` (UUID). Esto reduce el acoplamiento: un cambio en los campos del perfil no afecta la lógica de autenticación y vice versa. A futuro, si se quiere integrar otra aplicación con el sistema de autenticación de Fukusuke, se puede reutilizar `auth-service` de forma aislada.
 
 ---
 
@@ -1109,11 +1582,11 @@ flowchart LR
 
 **Descarte:** Se descarta porque si `notification-service` falla o responde lento, la creación del pedido también fallaría o demoraría, aunque el correo de confirmación no es crítico para la transacción. Además, `order-service` tendría que conocer las URLs de todos los servicios que reaccionan a sus eventos, lo que aumenta el acoplamiento.
 
-**Alternativa B:** Bus de eventos asíncrono: `order-service` emite eventos (`order.created`, `order.status_changed`) y los servicios interesados reaccionan de forma independiente.
+**Alternativa B:** Bus de eventos asíncrono: `order-service` emite eventos y los servicios interesados reaccionan de forma independiente mediante decoradores `@OnEvent`.
 
 **Selección:** Se selecciona la Alternativa B.
 
-**Justificación:** El pedido se crea correctamente sin importar el estado de `notification-service`. `order-service` no necesita saber que `notification-service` o `report-service` existen: solo emite el evento. Si se agrega un nuevo servicio que reaccione a pedidos en el futuro, no hay que modificar `order-service`. Esto mejora la mantenibilidad y reduce significativamente el acoplamiento entre módulos.
+**Justificación:** El pedido se crea correctamente sin importar el estado de `notification-service`. `order-service` no necesita saber que `notification-service` o `report-service` existen: solo emite el evento. En la implementación se utilizan cuatro eventos distintos: `order.created` (al persistir el pedido), `order.paid` (al transicionar a estado pagado), `order.status_changed` (en cualquier otra transición) y `order.cancelled` (al anular). `notification-service` reacciona a los tres primeros para registrar notificaciones al usuario, y `report-service` reacciona a `order.paid` para acumular las ventas en el reporte semanal. Si se agrega un nuevo servicio que reaccione a pedidos en el futuro, no hay que modificar `order-service`. Esto mejora la mantenibilidad y reduce significativamente el acoplamiento entre módulos.
 
 ---
 
@@ -1130,3 +1603,24 @@ flowchart LR
 **Selección:** Se selecciona la Alternativa B.
 
 **Justificación:** Cada módulo puede evolucionar su esquema de forma independiente sin coordinación con otros equipos. Es posible usar Redis para el carrito (alta velocidad de lectura/escritura), PostgreSQL para pedidos (consistencia transaccional) y almacenamiento distinto para reportes, sin que un servicio afecte al otro. Esto mejora la escalabilidad y reduce el acoplamiento estructural entre módulos.
+
+**Implementación actual:** En el MVP todos los módulos comparten una conexión PostgreSQL única (`DATABASE_URL`). La separación es real a nivel de tablas: cada módulo registra exclusivamente sus propias entidades mediante `TypeOrmModule.forFeature([...])` y ningún servicio consulta las tablas de otro módulo. Las tablas gestionadas son: `credentials` y `user_profiles` (auth), `saved_addresses` (users), `products` y `categories` (products), `carts` y `cart_items` (cart), `orders` y `order_items` (orders), `payments` (payments), `notifications` (notifications), `weekly_reports` y `daily_sales` (reports). Migrar a conexiones físicamente separadas por servicio es una evolución futura que solo requiere parametrizar `TypeOrmModule.forRootAsync` con URLs distintas por módulo.
+
+---
+
+## 8. Verificación con Tests Unitarios
+
+Los tests unitarios respaldan directamente las afirmaciones arquitectónicas del documento. Todos los tests se ejecutan sin base de datos real, usando mocks del repositorio TypeORM (`getRepositoryToken`).
+
+```bash
+cd backend && npm test
+```
+
+| Archivo de test | Qué afirmación arquitectónica respalda |
+|---|---|
+| `auth/auth.service.spec.ts` | Registro crea `UserProfile` y luego `Credential` en ese orden; login verifica bcrypt; `getMe` combina perfil y credencial. Prueba el flujo completo de auth sin dependencias externas. |
+| `users/users.service.spec.ts` | `getUserById` lanza `NotFoundException` si no existe; `updateProfile` aplica cambios parciales; `removeAddress` lanza `ForbiddenException` si la dirección pertenece a otro usuario. Prueba el control de acceso en user-service. |
+| `orders/orders.service.spec.ts` | La máquina de estados rechaza transiciones inválidas; el control de roles impide a un cajero transicionar a `en_camino`; `EventEmitter2.emit` se invoca con `order.created` al crear un pedido y con `order.paid` al transicionar a `pagado`; `PaymentsService.processPayment` se llama cuando el DTO incluye `paymentData`. |
+| `payments/payments.service.spec.ts` | El polimorfismo de `PaymentMethod` funciona con las 3 subclases (`tarjeta`, `servipag`, `transferencia`); un pago rechazado persiste con `status: rechazado`. |
+| `notifications/notifications.service.spec.ts` | Los handlers `@OnEvent` (`handleOrderCreated`, `handleOrderStatusChanged`, `handleOrderCancelled`) invocan los métodos `notifyOrder*` correspondientes. |
+| `reports/reports.service.spec.ts` | `handleOrderPaid` invoca `registerSale` con el monto del evento; `registerSale` crea o actualiza `WeeklyReport` y `DailySales` correctamente. |
