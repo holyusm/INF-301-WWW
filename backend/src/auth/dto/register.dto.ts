@@ -5,7 +5,8 @@ import {
   IsString,
   MinLength,
 } from 'class-validator';
-import { UserGender, UserRole } from '../entities/user.entity';
+import { UserRole } from '../entities/user.entity';
+import { UserGender } from '../../users/entities/user-profile.entity';
 
 export class RegisterDto {
   @IsString()

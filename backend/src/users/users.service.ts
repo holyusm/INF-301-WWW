@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User } from '../auth/entities/user.entity';
+import { UserProfile } from './entities/user-profile.entity';
 import { SavedAddress } from './entities/address.entity';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { CreateAddressDto } from './dto/create-address.dto';
@@ -13,22 +13,22 @@ import { CreateAddressDto } from './dto/create-address.dto';
 @Injectable()
 export class UsersService {
   constructor(
-    @InjectRepository(User)
-    private readonly userRepo: Repository<User>,
+    @InjectRepository(UserProfile)
+    private readonly profileRepo: Repository<UserProfile>,
     @InjectRepository(SavedAddress)
     private readonly addressRepo: Repository<SavedAddress>,
   ) {}
 
-  async getUserById(id: string): Promise<User> {
-    const user = await this.userRepo.findOneBy({ id });
-    if (!user) throw new NotFoundException('Usuario no encontrado');
-    return user;
+  async getUserById(id: string): Promise<UserProfile> {
+    const profile = await this.profileRepo.findOneBy({ id });
+    if (!profile) throw new NotFoundException('Usuario no encontrado');
+    return profile;
   }
 
-  async updateProfile(id: string, dto: UpdateUserDto): Promise<User> {
-    const user = await this.getUserById(id);
-    Object.assign(user, dto);
-    return this.userRepo.save(user);
+  async updateProfile(id: string, dto: UpdateUserDto): Promise<UserProfile> {
+    const profile = await this.getUserById(id);
+    Object.assign(profile, dto);
+    return this.profileRepo.save(profile);
   }
 
   async getAddresses(userId: string): Promise<SavedAddress[]> {

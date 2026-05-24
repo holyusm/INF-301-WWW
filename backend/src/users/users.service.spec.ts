@@ -2,10 +2,10 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { NotFoundException, ForbiddenException } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { User, UserRole, UserGender } from '../auth/entities/user.entity';
+import { UserProfile, UserGender } from './entities/user-profile.entity';
 import { SavedAddress } from './entities/address.entity';
 
-const mockUserRepo = {
+const mockProfileRepo = {
   findOneBy: jest.fn(),
   save: jest.fn(),
 };
@@ -18,12 +18,10 @@ const mockAddressRepo = {
   remove: jest.fn(),
 };
 
-const baseUser: User = {
-  id: 'user-uuid-1',
+const baseProfile: UserProfile = {
+  id: 'profile-uuid-1',
   run: '12345678-9',
   fullName: 'Taro Yamamoto',
-  email: 'taro@fukusuke.cl',
-  password: 'hashed-password',
   phone: '+56912345678',
   address: 'Av. Sushi 123',
   commune: 'Providencia',
@@ -31,14 +29,12 @@ const baseUser: User = {
   region: 'Metropolitana',
   birthDate: '1990-01-01',
   gender: UserGender.M,
-  role: UserRole.CLIENTE,
-  active: true,
   createdAt: new Date('2024-01-01'),
 };
 
 const baseAddress: SavedAddress = {
   id: 'addr-uuid-1',
-  userId: 'user-uuid-1',
+  userId: 'profile-uuid-1',
   label: 'Casa',
   address: 'Av. Sushi 123',
   commune: 'Providencia',
@@ -54,7 +50,7 @@ describe('UsersService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         UsersService,
-        { provide: getRepositoryToken(User), useValue: mockUserRepo },
+        { provide: getRepositoryToken(UserProfile), useValue: mockProfileRepo },
         { provide: getRepositoryToken(SavedAddress), useValue: mockAddressRepo },
       ],
     }).compile();
@@ -64,17 +60,17 @@ describe('UsersService', () => {
 
   // ---------------------------------------------------------------- getUserById
   describe('getUserById', () => {
-    it('retorna el usuario cuando existe', async () => {
-      mockUserRepo.findOneBy.mockResolvedValue(baseUser);
+    it('retorna el perfil cuando existe', async () => {
+      mockProfileRepo.findOneBy.mockResolvedValue(baseProfile);
 
-      const result = await service.getUserById('user-uuid-1');
+      const result = await service.getUserById('profile-uuid-1');
 
-      expect(mockUserRepo.findOneBy).toHaveBeenCalledWith({ id: 'user-uuid-1' });
-      expect(result).toEqual(baseUser);
+      expect(mockProfileRepo.findOneBy).toHaveBeenCalledWith({ id: 'profile-uuid-1' });
+      expect(result).toEqual(baseProfile);
     });
 
     it('lanza NotFoundException cuando no existe', async () => {
-      mockUserRepo.findOneBy.mockResolvedValue(null);
+      mockProfileRepo.findOneBy.mockResolvedValue(null);
 
       await expect(service.getUserById('no-existe')).rejects.toThrow(
         NotFoundException,
@@ -84,21 +80,21 @@ describe('UsersService', () => {
 
   // --------------------------------------------------------------- updateProfile
   describe('updateProfile', () => {
-    it('actualiza y retorna el usuario modificado', async () => {
-      const updated = { ...baseUser, fullName: 'Hanako Yamamoto' };
-      mockUserRepo.findOneBy.mockResolvedValue({ ...baseUser });
-      mockUserRepo.save.mockResolvedValue(updated);
+    it('actualiza y retorna el perfil modificado', async () => {
+      const updated = { ...baseProfile, fullName: 'Hanako Yamamoto' };
+      mockProfileRepo.findOneBy.mockResolvedValue({ ...baseProfile });
+      mockProfileRepo.save.mockResolvedValue(updated);
 
-      const result = await service.updateProfile('user-uuid-1', {
+      const result = await service.updateProfile('profile-uuid-1', {
         fullName: 'Hanako Yamamoto',
       });
 
-      expect(mockUserRepo.save).toHaveBeenCalled();
+      expect(mockProfileRepo.save).toHaveBeenCalled();
       expect(result.fullName).toBe('Hanako Yamamoto');
     });
 
     it('lanza NotFoundException cuando el usuario no existe', async () => {
-      mockUserRepo.findOneBy.mockResolvedValue(null);
+      mockProfileRepo.findOneBy.mockResolvedValue(null);
 
       await expect(
         service.updateProfile('no-existe', { fullName: 'X' }),
@@ -111,10 +107,10 @@ describe('UsersService', () => {
     it('retorna las direcciones del usuario', async () => {
       mockAddressRepo.findBy.mockResolvedValue([baseAddress]);
 
-      const result = await service.getAddresses('user-uuid-1');
+      const result = await service.getAddresses('profile-uuid-1');
 
       expect(mockAddressRepo.findBy).toHaveBeenCalledWith({
-        userId: 'user-uuid-1',
+        userId: 'profile-uuid-1',
       });
       expect(result).toEqual([baseAddress]);
     });
@@ -122,7 +118,7 @@ describe('UsersService', () => {
     it('retorna arreglo vacío cuando no hay direcciones', async () => {
       mockAddressRepo.findBy.mockResolvedValue([]);
 
-      const result = await service.getAddresses('user-uuid-1');
+      const result = await service.getAddresses('profile-uuid-1');
 
       expect(result).toEqual([]);
     });
@@ -134,7 +130,7 @@ describe('UsersService', () => {
       mockAddressRepo.create.mockReturnValue(baseAddress);
       mockAddressRepo.save.mockResolvedValue(baseAddress);
 
-      const result = await service.addAddress('user-uuid-1', {
+      const result = await service.addAddress('profile-uuid-1', {
         label: 'Casa',
         address: 'Av. Sushi 123',
         commune: 'Providencia',
@@ -144,7 +140,7 @@ describe('UsersService', () => {
         label: 'Casa',
         address: 'Av. Sushi 123',
         commune: 'Providencia',
-        userId: 'user-uuid-1',
+        userId: 'profile-uuid-1',
       });
       expect(result).toEqual(baseAddress);
     });
@@ -156,7 +152,7 @@ describe('UsersService', () => {
       mockAddressRepo.findOneBy.mockResolvedValue(baseAddress);
       mockAddressRepo.remove.mockResolvedValue(undefined);
 
-      await service.removeAddress('user-uuid-1', 'addr-uuid-1');
+      await service.removeAddress('profile-uuid-1', 'addr-uuid-1');
 
       expect(mockAddressRepo.remove).toHaveBeenCalledWith(baseAddress);
     });
@@ -165,7 +161,7 @@ describe('UsersService', () => {
       mockAddressRepo.findOneBy.mockResolvedValue(null);
 
       await expect(
-        service.removeAddress('user-uuid-1', 'no-existe'),
+        service.removeAddress('profile-uuid-1', 'no-existe'),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -176,7 +172,7 @@ describe('UsersService', () => {
       });
 
       await expect(
-        service.removeAddress('user-uuid-1', 'addr-uuid-1'),
+        service.removeAddress('profile-uuid-1', 'addr-uuid-1'),
       ).rejects.toThrow(ForbiddenException);
     });
   });
