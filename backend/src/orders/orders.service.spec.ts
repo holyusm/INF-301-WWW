@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { OrdersService } from './orders.service';
 import { Order } from './entities/order.entity';
 import { OrderItem, OrderStatus } from './entities/order-item.entity';
@@ -19,17 +20,22 @@ const mockItemRepo = () => ({
   create: jest.fn(),
 });
 
+const mockEventEmitter = { emit: jest.fn() };
+
 describe('OrdersService', () => {
   let service: OrdersService;
   let orderRepo: ReturnType<typeof mockOrderRepo>;
   let itemRepo: ReturnType<typeof mockItemRepo>;
 
   beforeEach(async () => {
+    jest.clearAllMocks();
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OrdersService,
         { provide: getRepositoryToken(Order), useFactory: mockOrderRepo },
         { provide: getRepositoryToken(OrderItem), useFactory: mockItemRepo },
+        { provide: EventEmitter2, useValue: mockEventEmitter },
       ],
     }).compile();
 
@@ -87,6 +93,40 @@ describe('OrdersService', () => {
         }),
       );
       expect(result).toEqual(savedOrder);
+    });
+
+    it('should emit order.created event after saving', async () => {
+      const dto: CreateOrderDto = {
+        deliveryAddress: 'Av. Principal 123',
+        paymentMethod: 'tarjeta',
+        total: 8000,
+        items: [
+          {
+            productId: 'prod-2',
+            productName: 'Maki Roll',
+            unitPrice: 8000,
+            quantity: 1,
+          },
+        ],
+      };
+      const savedOrder = {
+        id: 'order-emit-test',
+        userId: 'user-1',
+        total: 8000,
+        status: OrderStatus.PENDIENTE,
+      };
+
+      itemRepo.create.mockReturnValue(dto.items[0]);
+      orderRepo.create.mockReturnValue(savedOrder);
+      orderRepo.save.mockResolvedValue(savedOrder);
+
+      await service.createOrder('user-1', dto);
+
+      expect(mockEventEmitter.emit).toHaveBeenCalledWith('order.created', {
+        orderId: 'order-emit-test',
+        userId: 'user-1',
+        total: 8000,
+      });
     });
   });
 
@@ -202,6 +242,40 @@ describe('OrdersService', () => {
       await expect(
         service.updateStatus('o1', dto, 'cajero'),
       ).rejects.toThrow();
+    });
+
+    it('should emit order.paid event when transitioning to PAGADO', async () => {
+      const order = { id: 'o1', status: OrderStatus.PENDIENTE, userId: 'u1', total: 12000 };
+      const updated = { ...order, status: OrderStatus.PAGADO };
+      orderRepo.findOne.mockResolvedValue(order);
+      orderRepo.save.mockResolvedValue(updated);
+
+      await service.updateStatus('o1', { status: OrderStatus.PAGADO }, 'admin');
+
+      expect(mockEventEmitter.emit).toHaveBeenCalledWith('order.paid', {
+        orderId: 'o1',
+        userId: 'u1',
+        amount: 12000,
+      });
+    });
+
+    it('should emit order.cancelled event when transitioning to ANULADO', async () => {
+      const order = { id: 'o1', status: OrderStatus.PENDIENTE, userId: 'u1', total: 5000 };
+      const updated = { ...order, status: OrderStatus.ANULADO, cancelReason: 'Error en pedido' };
+      orderRepo.findOne.mockResolvedValue(order);
+      orderRepo.save.mockResolvedValue(updated);
+
+      await service.updateStatus(
+        'o1',
+        { status: OrderStatus.ANULADO, cancelReason: 'Error en pedido' },
+        'admin',
+      );
+
+      expect(mockEventEmitter.emit).toHaveBeenCalledWith('order.cancelled', expect.objectContaining({
+        orderId: 'o1',
+        userId: 'u1',
+        reason: 'Error en pedido',
+      }));
     });
   });
 

@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { OnEvent } from '@nestjs/event-emitter';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 import {
   Notification,
@@ -85,5 +86,39 @@ export class NotificationsService {
       type: NotificationType.ORDER_CANCELLED,
       message: `Tu pedido #${orderId} ha sido cancelado. Motivo: ${reason}.`,
     });
+  }
+
+  @OnEvent('order.created')
+  async handleOrderCreated(payload: {
+    orderId: string;
+    userId: string;
+  }): Promise<void> {
+    await this.notifyOrderConfirmed(payload.userId, payload.orderId);
+  }
+
+  @OnEvent('order.status_changed')
+  async handleOrderStatusChanged(payload: {
+    orderId: string;
+    userId: string;
+    newStatus: string;
+  }): Promise<void> {
+    await this.notifyStatusChanged(
+      payload.userId,
+      payload.orderId,
+      payload.newStatus,
+    );
+  }
+
+  @OnEvent('order.cancelled')
+  async handleOrderCancelled(payload: {
+    orderId: string;
+    userId: string;
+    reason: string;
+  }): Promise<void> {
+    await this.notifyOrderCancelled(
+      payload.userId,
+      payload.orderId,
+      payload.reason,
+    );
   }
 }

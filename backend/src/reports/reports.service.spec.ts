@@ -283,4 +283,28 @@ describe('ReportsService', () => {
       });
     });
   });
+
+  describe('@OnEvent handlers', () => {
+    it('handleOrderPaid should invoke registerSale with the given amount', async () => {
+      const weekId = service.getCurrentWeekId();
+      const existingReport = {
+        id: 'report-1',
+        weekId,
+        totalRevenue: 0,
+        totalOrders: 0,
+        dailySales: [],
+      };
+      const updatedReport = { ...existingReport, totalRevenue: 9500, totalOrders: 1 };
+
+      weeklyReportRepo.findOne!.mockResolvedValue(existingReport);
+      dailySalesRepo.findOne!.mockResolvedValue(null);
+      dailySalesRepo.create!.mockReturnValue({ revenue: 0, orderCount: 0, avgOrderValue: 0 });
+      dailySalesRepo.save!.mockResolvedValue({ revenue: 9500, orderCount: 1, avgOrderValue: 9500 });
+      weeklyReportRepo.save!.mockResolvedValue(updatedReport);
+
+      await service.handleOrderPaid({ orderId: 'order-1', amount: 9500 });
+
+      expect(weeklyReportRepo.save).toHaveBeenCalled();
+    });
+  });
 });

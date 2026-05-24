@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Order } from './entities/order.entity';
 import { OrderItem, OrderStatus } from './entities/order-item.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -34,6 +35,7 @@ export class OrdersService {
     private readonly orderRepo: Repository<Order>,
     @InjectRepository(OrderItem)
     private readonly itemRepo: Repository<OrderItem>,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async createOrder(userId: string, dto: CreateOrderDto): Promise<Order> {
@@ -56,7 +58,15 @@ export class OrdersService {
       items,
     });
 
-    return this.orderRepo.save(order);
+    const saved = await this.orderRepo.save(order);
+
+    this.eventEmitter.emit('order.created', {
+      orderId: saved.id,
+      userId: saved.userId,
+      total: saved.total,
+    });
+
+    return saved;
   }
 
   async getOrderById(id: string): Promise<Order> {
@@ -84,6 +94,7 @@ export class OrdersService {
     requestingUserRole: string,
   ): Promise<Order> {
     const order = await this.getOrderById(id);
+    const previousStatus = order.status;
 
     // Validate state machine transition
     if (!this.canTransitionTo(order.status, dto.status)) {
@@ -115,7 +126,33 @@ export class OrdersService {
       order.cancelReason = dto.cancelReason;
     }
 
-    return this.orderRepo.save(order);
+    const updated = await this.orderRepo.save(order);
+
+    if (dto.status === OrderStatus.ANULADO) {
+      this.eventEmitter.emit('order.cancelled', {
+        orderId: updated.id,
+        userId: updated.userId,
+        reason: dto.cancelReason ?? 'Sin motivo indicado',
+        previousStatus,
+      });
+    } else {
+      this.eventEmitter.emit('order.status_changed', {
+        orderId: updated.id,
+        userId: updated.userId,
+        newStatus: updated.status,
+        previousStatus,
+      });
+
+      if (dto.status === OrderStatus.PAGADO) {
+        this.eventEmitter.emit('order.paid', {
+          orderId: updated.id,
+          userId: updated.userId,
+          amount: updated.total,
+        });
+      }
+    }
+
+    return updated;
   }
 
   canTransitionTo(current: OrderStatus, next: OrderStatus): boolean {

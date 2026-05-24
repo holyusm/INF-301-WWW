@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { OnEvent } from '@nestjs/event-emitter';
 import { DailySales } from './entities/daily-sales.entity';
 import { WeeklyReport } from './entities/weekly-report.entity';
 
@@ -120,5 +121,13 @@ export class ReportsService {
       order: { weekId: 'DESC' },
       take: n,
     });
+  }
+
+  @OnEvent('order.paid')
+  async handleOrderPaid(payload: {
+    orderId: string;
+    amount: number;
+  }): Promise<void> {
+    await this.registerSale(payload.amount);
   }
 }

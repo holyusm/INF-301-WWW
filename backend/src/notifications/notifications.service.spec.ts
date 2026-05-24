@@ -195,4 +195,42 @@ describe('NotificationsService', () => {
       expect(result.message).toContain(orderId);
     });
   });
+
+  describe('@OnEvent handlers', () => {
+    it('handleOrderCreated should call notifyOrderConfirmed', async () => {
+      const notif: Partial<Notification> = {
+        id: 'n1',
+        userId: 'u1',
+        type: NotificationType.ORDER_CONFIRMED,
+        message: 'confirmado',
+        read: false,
+      };
+      repo.create!.mockReturnValue(notif);
+      repo.save!.mockResolvedValue(notif);
+
+      await service.handleOrderCreated({ orderId: 'o1', userId: 'u1' });
+
+      expect(repo.save).toHaveBeenCalled();
+    });
+
+    it('handleOrderCancelled should call notifyOrderCancelled', async () => {
+      const notif: Partial<Notification> = {
+        id: 'n2',
+        userId: 'u1',
+        type: NotificationType.ORDER_CANCELLED,
+        message: 'cancelado',
+        read: false,
+      };
+      repo.create!.mockReturnValue(notif);
+      repo.save!.mockResolvedValue(notif);
+
+      await service.handleOrderCancelled({
+        orderId: 'o1',
+        userId: 'u1',
+        reason: 'Cambió de opinión',
+      });
+
+      expect(repo.save).toHaveBeenCalled();
+    });
+  });
 });
