@@ -8,8 +8,7 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { AuthService } from './auth.service';
-import { Credential } from './entities/credential.entity';
-import { UserRole } from './entities/user.entity';
+import { Credential, UserRole } from './entities/credential.entity';
 import { UserProfile, UserGender } from '../users/entities/user-profile.entity';
 
 jest.mock('bcrypt');

@@ -4,7 +4,14 @@ import {
   Entity,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { UserRole } from './user.entity';
+
+export enum UserRole {
+  CLIENTE = 'cliente',
+  ADMIN = 'admin',
+  CAJERO = 'cajero',
+  DESPACHADOR = 'despachador',
+  DUENO = 'dueno',
+}
 
 @Entity('credentials')
 export class Credential {

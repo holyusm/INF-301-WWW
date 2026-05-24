@@ -1,4 +1,4 @@
-// Canonical roles for Fukusuke — kept in sync with UserRole in user.entity.ts
+// Roles canónicos de Fukusuke — equivalente a `UserRole` en credential.entity.ts
 export enum Role {
   ADMIN = 'admin',
   DUENO = 'dueno',
