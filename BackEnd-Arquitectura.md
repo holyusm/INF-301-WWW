@@ -6,27 +6,31 @@
 
 ### 1.1 Microservicios Identificados
 
-| Microservicio | Puerto | Responsabilidad única |
-|---|---|---|
-| `auth-service` | 3001 | Autenticación, registro y gestión de tokens JWT |
-| `user-service` | 3002 | Perfil de usuario y direcciones de despacho |
-| `product-service` | 3003 | Catálogo de productos y categorías |
-| `cart-service` | 3004 | Gestión del carrito de compras |
-| `order-service` | 3005 | Ciclo de vida completo del pedido |
-| `payment-service` | 3006 | Procesamiento de pagos |
-| `notification-service` | 3007 | Envío de notificaciones por correo |
-| `report-service` | 3008 | Reportes semanales de ventas para el administrador |
+Para el backend de Fukusuke se definieron 8 microservicios, cada uno con una responsabilidad única y bien delimitada. En la implementación actual todos corren como módulos dentro del mismo proceso NestJS, lo que permite verificar el funcionamiento de forma sencilla sin perder la separación lógica propia de una arquitectura de microservicios real.
+
+| Microservicio | Responsabilidad única |
+|---|---|
+| `auth-service` | Autenticación, registro de usuarios y emisión de tokens JWT |
+| `user-service` | Gestión del perfil de usuario y direcciones de despacho guardadas |
+| `product-service` | Catálogo de productos y categorías del menú |
+| `cart-service` | Estado temporal del carrito de compras por usuario |
+| `order-service` | Ciclo de vida completo del pedido y transiciones de estado |
+| `payment-service` | Procesamiento de pagos según el método elegido |
+| `notification-service` | Registro y envío de notificaciones al usuario |
+| `report-service` | Generación de reportes semanales de ventas para el administrador |
 
 ---
 
-### 1.2 Vista General — Arquitectura de Microservicios
+### 1.2 Vista General de la Arquitectura
+
+El siguiente diagrama muestra cómo se comunican los microservicios entre sí y con el cliente. Se distinguen dos tipos de comunicación: sincrónica (REST, cuando se necesita respuesta inmediata) y asincrónica (eventos, cuando no es crítico esperar).
 
 ```mermaid
 flowchart TD
     Client([Cliente Web / Fukusuke Frontend])
 
     subgraph Gateway["API Gateway"]
-        AG[/Enrutador + Auth Middleware/]
+        AG[/Enrutador + Validación JWT/]
     end
 
     subgraph Core["Microservicios Core"]
@@ -54,8 +58,8 @@ flowchart TD
         DB_REPORT[(report_db)]
     end
 
-    subgraph Events["Bus de Eventos — Comunicación Asíncrona"]
-        MB[[Message Broker]]
+    subgraph Events["Comunicación Asíncrona"]
+        MB[[Bus de Eventos]]
     end
 
     Client --> AG
@@ -68,8 +72,8 @@ flowchart TD
     ORDER -->|REST sync| PAY
     ORDER -->|evento: order.created| MB
     ORDER -->|evento: order.status_changed| MB
-    MB -->|escucha eventos| NOTIF
-    MB -->|escucha eventos| REPORT
+    MB -->|escucha| NOTIF
+    MB -->|escucha| REPORT
 
     AUTH --- DB_AUTH
     USER --- DB_USER
@@ -85,7 +89,7 @@ flowchart TD
 
 ### 1.3 Diagrama de Clases del Dominio
 
-Este diagrama muestra las clases principales, sus atributos, métodos y relaciones entre microservicios.
+Este diagrama muestra todas las clases principales del sistema, sus atributos, métodos y las relaciones entre ellas. Las relaciones entre servicios se representan mediante IDs (UUID) para evitar dependencias directas entre módulos.
 
 ```mermaid
 classDiagram
@@ -100,6 +104,7 @@ classDiagram
         +String phone
         +UserRole role
         +Boolean active
+        +Date createdAt
     }
 
     class UserRole {
@@ -108,7 +113,7 @@ classDiagram
         ADMIN
         CAJERO
         DESPACHADOR
-        DUEÑO
+        DUENO
     }
 
     class SavedAddress {
@@ -117,6 +122,7 @@ classDiagram
         +String label
         +String address
         +String commune
+        +Date createdAt
     }
 
     class Product {
@@ -126,7 +132,8 @@ classDiagram
         +Number price
         +Boolean available
         +Boolean featured
-        +getFormattedPrice() String
+        +String imageUrl
+        +Date createdAt
     }
 
     class Category {
@@ -138,12 +145,11 @@ classDiagram
     class Cart {
         +UUID id
         +UUID userId
-        +DateTime updatedAt
-        +getTotal() Number
-        +getItemCount() Number
+        +Date updatedAt
     }
 
     class CartItem {
+        +UUID id
         +UUID productId
         +String productName
         +Number quantity
@@ -159,7 +165,7 @@ classDiagram
         +String deliveryAddress
         +String paymentMethod
         +String cancelReason
-        +DateTime createdAt
+        +Date createdAt
     }
 
     class OrderStatus {
@@ -173,6 +179,7 @@ classDiagram
     }
 
     class OrderItem {
+        +UUID id
         +UUID productId
         +String productName
         +Number quantity
@@ -213,7 +220,8 @@ classDiagram
         +Number amount
         +PaymentStatus status
         +String methodType
-        +DateTime processedAt
+        +String transactionId
+        +Date processedAt
     }
 
     class Notification {
@@ -221,7 +229,8 @@ classDiagram
         +UUID userId
         +NotificationType type
         +String message
-        +DateTime sentAt
+        +Boolean read
+        +Date createdAt
     }
 
     class WeeklyReport {
@@ -229,11 +238,11 @@ classDiagram
         +String weekId
         +Number totalRevenue
         +Number totalOrders
-        +DateTime generatedAt
-        +getTrend() String
+        +Date updatedAt
     }
 
     class DailySales {
+        +UUID id
         +String date
         +Number revenue
         +Number orderCount
@@ -257,44 +266,43 @@ classDiagram
 
 ### 1.4 Estructura Interna — Patrón Aplicado a Todos los Microservicios
 
-Todos los microservicios aplican una arquitectura en **4 capas** idéntica:
+Cada microservicio aplica el mismo patrón de arquitectura en cuatro capas. Esto permite separar claramente las responsabilidades dentro de cada módulo:
 
 ```mermaid
 classDiagram
     direction LR
 
     class Controller {
-        <<API Layer>>
-        +handleRequest(req) Response
-        +validateInputDTO() void
-        +returnResponse(data) HTTP200
+        <<Capa API>>
+        +recibe requests HTTP
+        +valida DTOs de entrada
+        +retorna respuestas JSON
     }
 
     class Service {
-        <<Business Logic>>
-        +executeUseCase() Result
-        +applyBusinessRules() void
-        +orchestrateDependencies() void
+        <<Lógica de Negocio>>
+        +aplica reglas del dominio
+        +orquesta repositorios
+        +lanza excepciones de negocio
     }
 
     class Repository {
-        <<Data Access>>
-        +findById(id) Entity
-        +findAll(filters) Entity[]
-        +save(entity) Entity
-        +delete(id) void
+        <<Acceso a Datos>>
+        +findById()
+        +findAll()
+        +save()
+        +delete()
     }
 
-    class Model {
-        <<Entity>>
-        +UUID id
-        +attributes
-        +businessMethod() Result
+    class Entity {
+        <<Modelo del Dominio>>
+        +atributos de la tabla
+        +métodos de cálculo
     }
 
     Controller --> Service : invoca
     Service --> Repository : consulta
-    Repository --> Model : persiste
+    Repository --> Entity : persiste
 ```
 
 ---
@@ -304,25 +312,24 @@ classDiagram
 ```mermaid
 classDiagram
     class AuthController {
+        +POST /auth/register(dto) TokenDTO
         +POST /auth/login(dto) TokenDTO
-        +POST /auth/register(dto) UserDTO
         +GET /auth/profile() UserDTO
-        +POST /auth/logout() void
     }
 
     class AuthService {
-        +login(email, password) JwtToken
-        +register(dto) User
-        +validateToken(token) JwtPayload
+        +register(dto) TokenResponse
+        +login(dto) TokenResponse
+        +getMe(userId) User
         +hashPassword(raw) String
-        +comparePassword(raw, hash) Boolean
     }
 
     class AuthRepository {
         +findByEmail(email) User
         +findById(id) User
+        +findByRun(run) User
         +create(user) User
-        +existsByRun(run) Boolean
+        +save(user) User
     }
 
     class User {
@@ -334,11 +341,6 @@ classDiagram
         +String phone
         +UserRole role
         +Boolean active
-    }
-
-    class JwtToken {
-        +String accessToken
-        +Number expiresIn
     }
 
     class LoginDTO {
@@ -356,6 +358,11 @@ classDiagram
         +String commune
     }
 
+    class JwtToken {
+        +String accessToken
+        +Number expiresIn
+    }
+
     AuthController --> AuthService : usa
     AuthService --> AuthRepository : usa
     AuthRepository --> User : persiste
@@ -371,11 +378,11 @@ classDiagram
 ```mermaid
 classDiagram
     class UserController {
-        +GET /users/:id UserDTO
-        +PUT /users/:id UserDTO
-        +GET /users/:id/addresses AddressDTO[]
-        +POST /users/:id/addresses AddressDTO
-        +DELETE /users/:id/addresses/:addrId void
+        +GET /users/profile() UserDTO
+        +PUT /users/profile(dto) UserDTO
+        +GET /users/addresses() AddressDTO[]
+        +POST /users/addresses(dto) AddressDTO
+        +DELETE /users/addresses/:id void
     }
 
     class UserService {
@@ -383,18 +390,19 @@ classDiagram
         +updateProfile(id, dto) User
         +getAddresses(userId) SavedAddress[]
         +addAddress(userId, dto) SavedAddress
-        +removeAddress(userId, addrId) void
+        +removeAddress(userId, addressId) void
     }
 
     class UserRepository {
         +findById(id) User
-        +update(id, data) User
+        +save(user) User
     }
 
     class AddressRepository {
         +findByUserId(userId) SavedAddress[]
         +create(address) SavedAddress
-        +deleteById(id) void
+        +findOne(filter) SavedAddress
+        +remove(address) void
     }
 
     class User {
@@ -402,6 +410,8 @@ classDiagram
         +String fullName
         +String email
         +String phone
+        +String address
+        +String commune
         +UserRole role
     }
 
@@ -428,34 +438,32 @@ classDiagram
 ```mermaid
 classDiagram
     class ProductController {
-        +GET /products ProductDTO[]
+        +GET /products() ProductDTO[]
         +GET /products/:id ProductDTO
-        +GET /products/category/:slug ProductDTO[]
-        +POST /products ProductDTO
-        +PUT /products/:id ProductDTO
+        +POST /products(dto) ProductDTO
+        +PUT /products/:id(dto) ProductDTO
         +PATCH /products/:id/availability void
     }
 
     class ProductService {
-        +getAll(filters) Product[]
-        +getById(id) Product
-        +getByCategory(slug) Product[]
+        +findAll(categorySlug?) Product[]
+        +findById(id) Product
         +create(dto) Product
         +update(id, dto) Product
         +setAvailability(id, available) void
+        +seedCategories() void
     }
 
     class ProductRepository {
         +findAll() Product[]
         +findById(id) Product
-        +findByCategory(categoryId) Product[]
         +save(product) Product
-        +updateAvailability(id, available) void
     }
 
     class CategoryRepository {
         +findAll() Category[]
         +findBySlug(slug) Category
+        +save(category) Category
     }
 
     class Product {
@@ -465,7 +473,7 @@ classDiagram
         +Number price
         +Boolean available
         +Boolean featured
-        +getFormattedPrice() String
+        +String imageUrl
     }
 
     class Category {
@@ -489,37 +497,36 @@ classDiagram
 ```mermaid
 classDiagram
     class CartController {
-        +GET /cart/:userId Cart
-        +POST /cart/:userId/items CartItem
-        +PUT /cart/:userId/items/:productId CartItem
-        +DELETE /cart/:userId/items/:productId void
-        +DELETE /cart/:userId void
+        +GET /cart() CartDTO
+        +POST /cart/items(dto) CartDTO
+        +PUT /cart/items/:productId(dto) CartDTO
+        +DELETE /cart/items/:productId void
+        +DELETE /cart void
     }
 
     class CartService {
-        +getCart(userId) Cart
-        +addItem(userId, productId, qty) Cart
-        +updateItem(userId, productId, qty) Cart
-        +removeItem(userId, productId) Cart
+        +getCart(userId) CartWithTotal
+        +addItem(userId, dto) CartWithTotal
+        +updateItem(userId, productId, qty) CartWithTotal
+        +removeItem(userId, productId) CartWithTotal
         +clearCart(userId) void
-        +calculateTotal(cart) Number
+        +calculateTotal(items) Number
     }
 
     class CartRepository {
         +findByUserId(userId) Cart
         +save(cart) Cart
-        +deleteByUserId(userId) void
+        +create(data) Cart
     }
 
     class Cart {
         +UUID id
         +UUID userId
-        +DateTime updatedAt
-        +getTotal() Number
-        +getItemCount() Number
+        +Date updatedAt
     }
 
     class CartItem {
+        +UUID id
         +UUID productId
         +String productName
         +Number quantity
@@ -540,30 +547,30 @@ classDiagram
 ```mermaid
 classDiagram
     class OrderController {
-        +POST /orders Order
-        +GET /orders/:id Order
-        +GET /orders/user/:userId Order[]
-        +GET /orders Order[]
-        +PATCH /orders/:id/status Order
+        +POST /orders(dto) OrderDTO
+        +GET /orders/my() OrderDTO[]
+        +GET /orders() OrderDTO[]
+        +GET /orders/:id OrderDTO
+        +PATCH /orders/:id/status(dto) OrderDTO
         +DELETE /orders/:id void
     }
 
     class OrderService {
-        +createOrder(dto) Order
+        +createOrder(userId, dto) Order
         +getOrderById(id) Order
         +getOrdersByUser(userId) Order[]
         +getAllOrders() Order[]
-        +updateStatus(id, status) Order
-        +cancelOrder(id, reason) Order
+        +updateStatus(id, dto, role) Order
+        +deleteOrder(id) void
         +canTransitionTo(current, next) Boolean
     }
 
     class OrderRepository {
-        +create(order) Order
-        +findById(id) Order
-        +findByUserId(userId) Order[]
-        +findAll() Order[]
-        +updateStatus(id, status) Order
+        +create(data) Order
+        +save(order) Order
+        +findOne(filter) Order
+        +find(filter) Order[]
+        +remove(order) void
     }
 
     class Order {
@@ -574,10 +581,11 @@ classDiagram
         +String deliveryAddress
         +String paymentMethod
         +String cancelReason
-        +DateTime createdAt
+        +Date createdAt
     }
 
     class OrderItem {
+        +UUID id
         +UUID productId
         +String productName
         +Number quantity
@@ -609,22 +617,20 @@ classDiagram
 ```mermaid
 classDiagram
     class PaymentController {
-        +POST /payments/process PaymentResultDTO
+        +POST /payments/process(dto) PaymentDTO
         +GET /payments/order/:orderId PaymentDTO
-        +GET /payments/:id PaymentDTO
     }
 
     class PaymentService {
-        +processPayment(orderId, type, amount) Payment
+        +processPayment(dto) Payment
         +getByOrderId(orderId) Payment
-        +buildPaymentMethod(type) PaymentMethod
+        +buildPaymentMethod(dto) PaymentMethod
     }
 
     class PaymentRepository {
-        +create(payment) Payment
-        +findByOrderId(orderId) Payment
-        +findById(id) Payment
-        +updateStatus(id, status) Payment
+        +create(data) Payment
+        +save(payment) Payment
+        +findOne(filter) Payment
     }
 
     class PaymentMethod {
@@ -660,7 +666,8 @@ classDiagram
         +Number amount
         +PaymentStatus status
         +String methodType
-        +DateTime processedAt
+        +String transactionId
+        +Date processedAt
     }
 
     class PaymentResult {
@@ -686,29 +693,25 @@ classDiagram
 ```mermaid
 classDiagram
     class NotificationController {
-        +POST /notifications/send void
-        +GET /notifications/user/:userId Notification[]
+        +GET /notifications() NotificationDTO[]
+        +PATCH /notifications/read-all void
+        +PATCH /notifications/:id/read void
     }
 
     class NotificationService {
-        +handleOrderCreated(event) void
-        +handleOrderStatusChanged(event) void
-        +sendEmail(to, template, data) void
+        +createNotification(dto) Notification
+        +getByUser(userId) Notification[]
+        +markAsRead(id, userId) void
+        +markAllAsRead(userId) void
+        +notifyOrderConfirmed(userId, orderId) void
+        +notifyStatusChanged(userId, orderId, status) void
+        +notifyOrderCancelled(userId, orderId, reason) void
     }
 
     class NotificationRepository {
-        +create(notification) Notification
-        +findByUserId(userId) Notification[]
-    }
-
-    class EmailProvider {
-        <<interface>>
-        +send(to, subject, body) void
-    }
-
-    class EmailJsProvider {
-        +send(to, subject, body) void
-        -buildTemplate(template, data) String
+        +create(data) Notification
+        +save(notification) Notification
+        +find(filter) Notification[]
     }
 
     class Notification {
@@ -716,7 +719,8 @@ classDiagram
         +UUID userId
         +NotificationType type
         +String message
-        +DateTime sentAt
+        +Boolean read
+        +Date createdAt
     }
 
     class NotificationType {
@@ -728,8 +732,6 @@ classDiagram
 
     NotificationController --> NotificationService : usa
     NotificationService --> NotificationRepository : usa
-    NotificationService --> EmailProvider : usa
-    EmailProvider <|.. EmailJsProvider : implementa
     NotificationRepository --> Notification : persiste
     Notification --> NotificationType : tiene tipo
 ```
@@ -741,22 +743,26 @@ classDiagram
 ```mermaid
 classDiagram
     class ReportController {
-        +GET /reports/weekly WeeklyReportDTO
-        +GET /reports/weekly/:weekId WeeklyReportDTO
-        +GET /reports/summary SummaryDTO
+        +GET /reports/current WeeklyReportDTO
+        +GET /reports/recent WeeklyReportDTO[]
+        +GET /reports/:weekId WeeklyReportDTO
+        +POST /reports/register-sale void
     }
 
     class ReportService {
-        +generateWeeklyReport(weekId) WeeklyReport
+        +getCurrentWeekId() String
+        +getWeekIdForDate(date) String
         +getCurrentWeekReport() WeeklyReport
-        +handleOrderCreated(event) void
-        +aggregateSalesByDay(orders) DailySales[]
+        +getWeekReport(weekId) WeeklyReport
+        +registerSale(amount, date?) void
+        +getRecentWeeks(n) WeeklyReport[]
     }
 
     class ReportRepository {
-        +findByWeek(weekId) WeeklyReport
-        +upsertDailySales(data) void
-        +getRecentWeeks(n) WeeklyReport[]
+        +findOne(filter) WeeklyReport
+        +save(report) WeeklyReport
+        +find(filter) WeeklyReport[]
+        +create(data) WeeklyReport
     }
 
     class WeeklyReport {
@@ -764,11 +770,11 @@ classDiagram
         +String weekId
         +Number totalRevenue
         +Number totalOrders
-        +DateTime generatedAt
-        +getTrend() String
+        +Date updatedAt
     }
 
     class DailySales {
+        +UUID id
         +String date
         +Number revenue
         +Number orderCount
@@ -787,51 +793,56 @@ classDiagram
 
 ### 2.1 Composición ◆ (rombo relleno)
 
-La composición indica que el objeto contenido **no puede existir sin el contenedor**. Si el contenedor se destruye, el contenido también.
+La composición se usa cuando el objeto "hijo" no tiene razón de existir por sí solo: su ciclo de vida está completamente atado al del "padre". Si el padre se elimina, el hijo también desaparece.
 
 | Relación | Justificación |
 |---|---|
-| `Order` ◆── `OrderItem` | Un `OrderItem` no tiene sentido sin el pedido al que pertenece. Si el pedido se elimina, sus ítems desaparecen en cascada. |
-| `Cart` ◆── `CartItem` | El ítem del carrito es una entidad efímera que depende completamente del carrito. No existe de forma independiente. |
-| `WeeklyReport` ◆── `DailySales` | Los datos diarios son parte constitutiva del reporte semanal; no tienen propósito fuera de él. |
+| `Order` ◆── `OrderItem` | Un ítem de pedido no tiene ningún sentido sin el pedido al que pertenece. El precio que guarda es el precio histórico de esa compra, no un dato reutilizable. Si el pedido se borra, sus ítems también. |
+| `Cart` ◆── `CartItem` | El ítem del carrito es parte del carrito: no existe de forma independiente y se elimina en cascada cuando el carrito se vacía. |
+| `WeeklyReport` ◆── `DailySales` | Los datos de ventas diarias existen para construir el reporte semanal. No tienen utilidad fuera de ese contexto. |
 
 ### 2.2 Agregación ◇ (rombo vacío)
 
-La agregación indica que el objeto contenido **puede existir independientemente**, pero conceptualmente "pertenece" al contenedor.
+La agregación se usa cuando el objeto "hijo" puede existir de manera independiente, pero conceptualmente está asociado al "padre". Se pueden agregar o quitar hijos sin destruir al padre.
 
 | Relación | Justificación |
 |---|---|
-| `User` ◇── `SavedAddress` | Las direcciones son entidades con ciclo de vida propio: se crean, editan y eliminan de forma independiente. El usuario puede tener cero o varias. No se destruyen al mismo tiempo que el usuario, sino que se gestionan separadamente. |
+| `User` ◇── `SavedAddress` | Las direcciones de despacho son entidades con vida propia: el usuario puede agregar, editar o eliminar cada una por separado. El usuario puede tener cero o varias, y estas se gestionan de forma independiente. |
 
-### 2.3 Herencia / Generalización ◁
+### 2.3 Herencia ◁
 
-La herencia se usa cuando existe una **jerarquía de tipos** con comportamiento compartido y especializaciones.
-
-| Relación | Justificación |
-|---|---|
-| `PaymentMethod` ◁── `CreditCardPayment` | Comparte el contrato (`process()`, `validate()`) pero implementa la lógica específica de tarjeta. |
-| `PaymentMethod` ◁── `ServipagPayment` | Misma interfaz, lógica de integración con Servipag. |
-| `PaymentMethod` ◁── `BankTransferPayment` | Misma interfaz, lógica específica para transferencia bancaria. |
-
-### 2.4 Realización (Interfaz) ◁ (línea punteada)
+La herencia se aplica cuando existe una familia de tipos que comparten un contrato (interfaz), pero cada uno tiene un comportamiento específico distinto.
 
 | Relación | Justificación |
 |---|---|
-| `EmailProvider` ◁.. `EmailJsProvider` | `EmailProvider` define el contrato de envío de correos. `EmailJsProvider` es la implementación concreta actual. En el futuro se podría cambiar a SendGrid sin modificar `NotificationService`. |
+| `PaymentMethod` ◁── `CreditCardPayment` | Comparte los métodos `process()` y `validate()`, pero la lógica de cobrar con tarjeta es propia de esta clase. |
+| `PaymentMethod` ◁── `ServipagPayment` | Misma estructura, pero con la lógica de integración de Servipag. |
+| `PaymentMethod` ◁── `BankTransferPayment` | Mismo contrato, pero valida número de cuenta y banco, no datos de tarjeta. |
 
-### 2.5 Asociación →
+### 2.4 Asociación →
+
+La asociación se usa cuando una clase referencia a otra, pero sin ninguna relación de propiedad o ciclo de vida compartido.
 
 | Relación | Justificación |
 |---|---|
-| `Product` → `Category` | Un producto pertenece a una categoría, pero la categoría existe de forma completamente independiente. |
-| `Payment` → `PaymentMethod` | El pago usa un método de pago durante su procesamiento, pero no lo posee como entidad. |
-| `Order` → `OrderStatus` | La enumeración describe el estado del pedido sin ser parte constitutiva de él. |
+| `Product` → `Category` | Un producto pertenece a una categoría, pero la categoría existe de forma completamente independiente y puede tener muchos productos. |
+| `Order` → `OrderStatus` | `OrderStatus` es una enumeración que describe el estado del pedido. No es una entidad que "pertenezca" al pedido, simplemente lo describe. |
+| `Payment` → `PaymentMethod` | El pago utiliza un método de pago para procesarse, pero no lo posee: el método de pago es una clase de comportamiento, no una entidad persistida. |
+
+### 2.5 Relaciones descartadas y por qué
+
+| Relación descartada | Alternativa elegida | Razón del descarte |
+|---|---|---|
+| `OrderItem` con referencia directa a `Product` | `OrderItem` guarda `productId`, `productName` y `unitPrice` como copia | Si `OrderItem` apuntara al `Product` actual, al cambiar el precio del menú los pedidos históricos mostrarían datos incorrectos. También crearía una dependencia en tiempo de ejecución entre `order-service` y `product-service`. |
+| `Order` con referencia directa a `User` | `Order` guarda solo `userId` (UUID) | No es necesario traer el objeto completo del usuario para gestionar un pedido. Guardar solo el ID mantiene el acoplamiento bajo entre módulos. |
+| Herencia entre `Cart` y `Order` | Sin relación de herencia entre ellos | Aunque ambos agrupan ítems, son entidades de dominios distintos: el carrito es efímero y mutable, el pedido es permanente e inmutable. No comparten comportamiento. |
+| `DailySales` como entidad independiente | Composición dentro de `WeeklyReport` | Los datos diarios solo tienen significado dentro de un reporte semanal. Hacerlos independientes habría complicado la estructura sin ningún beneficio real. |
 
 ### 2.6 Impacto de las relaciones en el acoplamiento
 
-- **La composición** mantiene la lógica interna de cada servicio (OrderItem vive solo dentro de order-service), evitando que otros servicios dependan de esa estructura.
-- **La herencia en PaymentMethod** permite que `PaymentService` trabaje con cualquier método de pago mediante polimorfismo, sin acoplar el código a un tipo específico.
-- **La asociación por ID** (OrderItem guarda `productId` como UUID, no una referencia al objeto Product) elimina el acoplamiento directo entre `order-service` y `product-service`.
+- La **composición** en `Order ◆── OrderItem` y `Cart ◆── CartItem` hace que cada módulo maneje sus propias estructuras de datos internas. Ningún otro servicio necesita conocer la existencia de `OrderItem` o `CartItem`.
+- La **herencia en PaymentMethod** permite que `PaymentService` trabaje con cualquier método de pago usando polimorfismo, sin necesitar un `if/else` que dependa del tipo concreto. Agregar un nuevo medio de pago no requiere modificar código existente.
+- Las **asociaciones por ID** (UUID) entre módulos evitan que un servicio necesite importar entidades de otro. `order-service` sabe que hay un usuario mediante su `userId`, pero no necesita importar ni conocer la clase `User`.
 
 ---
 
@@ -839,70 +850,78 @@ La herencia se usa cuando existe una **jerarquía de tipos** con comportamiento 
 
 ### 3.1 Responsabilidades por microservicio
 
-| Microservicio | Responsabilidades asignadas | Responsabilidades excluidas |
+| Microservicio | Qué hace | Qué no hace (y por qué) |
 |---|---|---|
-| `auth-service` | Login, registro, emisión de JWT, validación de tokens, hash de contraseñas | Gestión del perfil de usuario, gestión de direcciones |
-| `user-service` | Consultar y actualizar perfil, gestionar direcciones de despacho | Autenticación, pedidos, pagos |
-| `product-service` | Catálogo de productos, gestión de categorías, disponibilidad de productos | Stock/inventario numérico, precios históricos de pedidos |
-| `cart-service` | Estado temporal del carrito, agregar/quitar ítems, calcular total | Confirmación de pedidos, procesamiento de pagos |
-| `order-service` | Crear pedidos, gestionar ciclo de vida y transiciones de estado (cajero/despachador) | Procesar el pago directamente, enviar emails |
-| `payment-service` | Procesar pagos con distintos métodos (tarjeta, Servipag, transferencia), registrar el resultado | Crear o modificar pedidos |
-| `notification-service` | Enviar emails de confirmación y actualización de estado, registrar notificaciones | Lógica de negocio de pedidos o pagos |
-| `report-service` | Agregar datos de ventas por día/semana, generar reportes para el admin | Operaciones en tiempo real de pedidos o usuarios |
+| `auth-service` | Login, registro, emisión de JWT, validación de tokens, hash de contraseñas, control de roles | No gestiona el perfil del usuario (eso es del dominio de usuarios, no de autenticación) |
+| `user-service` | Ver y actualizar perfil, agregar y eliminar direcciones de despacho guardadas | No maneja autenticación ni pedidos, porque son dominios completamente distintos |
+| `product-service` | Catálogo de productos, gestión de categorías, marcar productos como disponibles o no | No maneja precios históricos de pedidos (eso queda en `OrderItem` para no depender del catálogo) |
+| `cart-service` | Crear, actualizar y vaciar el carrito de compras por usuario | No crea pedidos ni procesa pagos: su única función es mantener el estado temporal antes de confirmar |
+| `order-service` | Crear pedidos, gestionar el flujo de estados (pendiente → pagado → preparando → en camino → entregado), cancelaciones | No procesa el pago directamente ni envía correos: esas son responsabilidades de otros servicios |
+| `payment-service` | Procesar el pago según el método elegido (tarjeta, Servipag, transferencia), registrar el resultado | No crea ni modifica pedidos: solo informa si el cobro fue exitoso o no |
+| `notification-service` | Registrar notificaciones de eventos de pedidos, marcarlas como leídas | No tiene lógica de negocio sobre pedidos: solo reacciona a eventos que otros servicios emiten |
+| `report-service` | Acumular ventas por día y semana, entregar reportes al administrador | No accede a datos operacionales en tiempo real: trabaja solo con los eventos de pedidos completados |
 
 ### 3.2 Por qué cada responsabilidad pertenece a su servicio
 
-- **La validación de stock** no está en `product-service` porque la disponibilidad de un producto (campo `available: boolean`) es suficiente para el dominio de Fukusuke. No existe inventario numérico en este contexto.
-- **Los reportes** no están en `order-service` porque la analítica tiene ciclos de actualización distintos (por semana) y no debe afectar la disponibilidad del servicio operacional.
-- **El ciclo de vida del pedido** (cajero confirma pago, despachador actualiza entrega) está en `order-service` porque es parte del mismo dominio, con roles distintos accediendo al mismo recurso mediante permisos.
+- **El ciclo de vida del pedido** (incluyendo las transiciones de cajero y despachador) pertenece a `order-service` porque todos los actores — cliente, cajero y despachador — actúan sobre el mismo recurso: el pedido. Separar esas acciones en servicios distintos habría fragmentado un dominio que naturalmente es uno solo.
+
+- **La gestión de stock o disponibilidad** no se separó en un `inventory-service` porque Fukusuke maneja disponibilidad como un campo booleano simple (`available: true/false`), no como un inventario numérico. Crear un servicio aparte para eso habría sido sobrediseño para el contexto actual del problema.
+
+- **Los reportes** se separaron de `order-service` porque tienen ciclos de actualización distintos: los pedidos operan en tiempo real, los reportes se construyen semanalmente. Si vivieran en el mismo servicio, una consulta pesada de reportes podría afectar el tiempo de respuesta de las operaciones de pedidos.
+
+- **La autenticación** se separó del perfil de usuario porque la validación de JWT es transversal a todos los servicios, mientras que el perfil es una funcionalidad de negocio específica. Un cambio en cómo se almacenan las direcciones de despacho no debería tener ningún efecto sobre la lógica de generación de tokens.
 
 ---
 
 ## 4. Estructura de Microservicio
 
-### 4.1 Patrón seleccionado — Arquitectura en Capas (4 niveles)
+### 4.1 Patrón seleccionado — Arquitectura en 4 capas
+
+Todos los microservicios implementados siguen la misma estructura interna. Se eligió el patrón de arquitectura en capas porque es el más adecuado para el alcance del proyecto y el equipo de trabajo.
 
 ```
 ┌──────────────────────────────────────────────┐
-│  Controller / API Layer                      │
-│  Recibe requests HTTP, valida DTOs,          │
-│  delega a Service, retorna respuestas JSON   │
+│  Controller / Capa API                       │
+│  Recibe la petición HTTP, valida el token,   │
+│  transforma el body en un DTO y delega       │
+│  al Service. Retorna la respuesta JSON.      │
 ├──────────────────────────────────────────────┤
-│  Service / Business Logic                    │
-│  Aplica reglas de negocio, orquesta         │
-│  repositorios, emite eventos                 │
+│  Service / Lógica de Negocio                 │
+│  Aplica las reglas del dominio, valida       │
+│  condiciones de negocio y coordina las       │
+│  operaciones sobre los repositorios.         │
 ├──────────────────────────────────────────────┤
-│  Repository / Data Access                    │
-│  Abstrae las consultas a la base de datos,   │
-│  devuelve entidades de dominio               │
+│  Repository / Acceso a Datos                 │
+│  Abstrae las consultas a la base de datos.   │
+│  El Service no necesita saber SQL.           │
 ├──────────────────────────────────────────────┤
-│  Model / Entity                              │
-│  Define la estructura del dominio:           │
-│  atributos, tipos y métodos de cálculo       │
+│  Entity / Modelo del Dominio                 │
+│  Define la estructura de la tabla y los      │
+│  métodos de cálculo sobre sus datos.         │
 └──────────────────────────────────────────────┘
 ```
 
-### 4.2 Ejemplo aplicado — order-service
+### 4.2 Ejemplo concreto — order-service
 
-- **`OrderController`**: expone endpoints REST (`POST /orders`, `PATCH /orders/:id/status`), valida el JWT, parsea el body, responde con HTTP 200/201/404.
-- **`OrderService`**: implementa la máquina de estados, valida transiciones (`PENDIENTE → PAGADO → PREPARANDO → EN_CAMINO → ENTREGADO`), emite eventos al bus.
-- **`OrderRepository`**: ejecuta queries SQL `INSERT`, `UPDATE`, `SELECT`, abstrae la BD del servicio.
-- **`Order` / `OrderItem`**: entidades del dominio con sus atributos y el método `getSubtotal()`.
+- **`OrderController`**: recibe `POST /orders` con el JWT del usuario en el header, extrae el `userId` del token y pasa el DTO al servicio. Si el pedido se crea correctamente, responde con HTTP 201. Si hay un error de validación, responde con 400.
+- **`OrderService`**: contiene la lógica de la máquina de estados. Verifica que la transición solicitada es válida (por ejemplo, no se puede pasar de ENTREGADO a PREPARANDO), aplica restricciones por rol (el cajero solo puede marcar como PAGADO) y guarda el cambio.
+- **`OrderRepository`**: abstrae las consultas TypeORM. El servicio llama `findOne()`, `save()` o `find()` sin escribir SQL directamente.
+- **`Order` / `OrderItem`**: entidades TypeORM que definen la estructura de las tablas y el método `getSubtotal()` en `OrderItem`.
 
-### 4.3 Alternativas descartadas
+### 4.3 Alternativas de estructura descartadas
 
 | Alternativa | Razón del descarte |
 |---|---|
-| Arquitectura sin Repository (Service accede a BD directo) | Dificulta los tests unitarios y acopla la lógica de negocio al motor de base de datos. |
-| Arquitectura hexagonal completa (puertos y adaptadores) | Agrega complejidad innecesaria para el alcance del proyecto. La arquitectura en capas cumple los requisitos. |
-| Monolito modular (módulos internos en lugar de servicios) | No permite despliegue independiente ni escalado granular. |
+| Service accede directamente a la base de datos (sin Repository) | Acopla la lógica de negocio al motor de BD. Además hace imposible escribir tests unitarios sin una base de datos real. |
+| Arquitectura hexagonal completa (puertos y adaptadores) | Agrega una capa de abstracción adicional que no aporta valor real para el alcance de este proyecto. La arquitectura en capas cumple los mismos objetivos. |
+| Mezclar Controller y Service en una sola clase | Imposible de testear, mezcla responsabilidades y dificulta cualquier cambio futuro. |
 
-### 4.4 Por qué esta estructura facilita mantenimiento y evolución
+### 4.4 Por qué esta estructura facilita el mantenimiento
 
-- Cambiar el motor de base de datos solo afecta la capa Repository.
-- Agregar un nuevo endpoint solo afecta el Controller.
-- Las reglas de negocio están concentradas en el Service, fáciles de encontrar y modificar.
-- Los tests unitarios prueban el Service aislando el Repository con mocks.
+- Si se cambia el motor de base de datos (de PostgreSQL a MySQL, por ejemplo), solo hay que modificar la capa Repository. El Service no se toca.
+- Si se quiere agregar un nuevo endpoint, solo se modifica el Controller. La lógica de negocio permanece intacta.
+- Las reglas de negocio están todas en el Service, lo que facilita encontrarlas y modificarlas cuando cambian los requisitos.
+- Los tests unitarios prueban el Service usando repositorios simulados (mocks), sin necesitar una conexión real a la base de datos.
 
 ---
 
@@ -910,22 +929,25 @@ La herencia se usa cuando existe una **jerarquía de tipos** con comportamiento 
 
 ### 5.1 Análisis de cohesión por servicio
 
-| Microservicio | Todas sus clases sirven para... |
+| Microservicio | Por qué todas sus clases están relacionadas |
 |---|---|
-| `auth-service` | Autenticar: `AuthController`, `AuthService`, `AuthRepository`, `User`, `JwtToken`, `LoginDTO`, `RegisterDTO`. Cada clase resuelve un aspecto de la autenticación. |
-| `payment-service` | Procesar pagos: `PaymentController`, `PaymentService`, `PaymentRepository`, `Payment`, `PaymentMethod`, `CreditCardPayment`, `ServipagPayment`, `BankTransferPayment`, `PaymentResult`. Todas giran en torno al proceso de cobro. |
-| `order-service` | Gestionar pedidos: `OrderController`, `OrderService`, `OrderRepository`, `Order`, `OrderItem`, `OrderStatus`. Cada clase representa un aspecto del ciclo de vida del pedido. |
-| `notification-service` | Notificar: `NotificationController`, `NotificationService`, `NotificationRepository`, `EmailProvider`, `EmailJsProvider`, `Notification`, `NotificationType`. Todas orientadas al envío de mensajes externos. |
-| `report-service` | Reportar ventas: `ReportController`, `ReportService`, `ReportRepository`, `WeeklyReport`, `DailySales`. Solo contiene lo necesario para la analítica semanal. |
+| `auth-service` | `AuthController`, `AuthService`, `AuthRepository`, `User`, `LoginDTO`, `RegisterDTO` y `JwtToken` son clases que existen únicamente para resolver el problema de la autenticación. Ninguna tiene utilidad fuera de ese contexto. |
+| `user-service` | `UserController`, `UserService`, `UserRepository`, `AddressRepository`, `User` y `SavedAddress` trabajan juntas para gestionar el perfil. No hay ninguna clase que no esté directamente relacionada con esa función. |
+| `product-service` | `ProductController`, `ProductService`, `ProductRepository`, `CategoryRepository`, `Product` y `Category` conforman el catálogo. La clase `Category` existe porque es necesaria para clasificar los productos del menú. |
+| `cart-service` | `CartController`, `CartService`, `CartRepository`, `Cart` y `CartItem` se ocupan exclusivamente de manejar el carrito. No hay lógica de pedidos ni de pagos dentro de este módulo. |
+| `order-service` | `OrderController`, `OrderService`, `OrderRepository`, `Order`, `OrderItem` y el enum `OrderStatus` representan todos los aspectos del ciclo de vida de un pedido. Cada clase resuelve una parte de ese problema. |
+| `payment-service` | `PaymentController`, `PaymentService`, `PaymentRepository`, `Payment`, `PaymentMethod`, `CreditCardPayment`, `ServipagPayment`, `BankTransferPayment` y `PaymentResult` giran en torno al procesamiento del cobro. La jerarquía de `PaymentMethod` existe para encapsular las diferencias entre métodos de pago. |
+| `notification-service` | `NotificationController`, `NotificationService`, `NotificationRepository`, `Notification` y `NotificationType` se orientan únicamente al registro y gestión de notificaciones para el usuario. |
+| `report-service` | `ReportController`, `ReportService`, `ReportRepository`, `WeeklyReport` y `DailySales` se encargan exclusivamente de la analítica semanal. No hay operaciones de negocio mezcladas aquí. |
 
-### 5.2 Clases movidas o descartadas para mejorar cohesión
+### 5.2 Clases que se movieron o descartaron para mantener la cohesión
 
-| Clase / función | Dónde podría haber estado | Dónde está | Razón |
+| Clase o función | Dónde podría haber estado | Dónde quedó finalmente | Por qué se tomó esa decisión |
 |---|---|---|---|
-| `SavedAddress` | `auth-service` (junto al User) | `user-service` | Las direcciones son información del perfil, no de autenticación. Mezclarlas reduciría la cohesión de ambos servicios. |
-| `OrderItem` | `product-service` (como ítem del catálogo) | `order-service` | Representa el precio histórico en el momento de la compra, no el precio actual del catálogo. |
-| Lógica de reportes | `order-service` (como módulo de estadísticas) | `report-service` | La analítica tiene ciclos de vida distintos a las operaciones de pedidos. Separarla mantiene alta cohesión en `order-service`. |
-| `EmailProvider` / `EmailJsProvider` | `order-service` | `notification-service` | El envío de correos no es parte del ciclo de vida del pedido, sino una reacción a él. |
+| `SavedAddress` | Dentro de `auth-service`, junto al `User` | `user-service` | Las direcciones de despacho son información del perfil, no datos de autenticación. Juntarlos habría reducido la cohesión de `auth-service`, que debe enfocarse solo en tokens y credenciales. |
+| `OrderItem` | Dentro de `product-service` como un tipo de ítem del catálogo | `order-service` | `OrderItem` no representa el producto actual del catálogo, sino el estado del producto en el momento de la compra. Su precio es histórico e inmutable. Separarlo de `order-service` habría roto esa lógica. |
+| Lógica de reportes y estadísticas | Dentro de `order-service` como un módulo de analítica | `report-service` | La analítica tiene un ciclo de vida distinto: se calcula por semana, no en tiempo real. Mezclarla con las operaciones de pedidos habría añadido funcionalidad poco relacionada al servicio más crítico del sistema. |
+| Envío de notificaciones | Dentro de `order-service`, al crear o actualizar un pedido | `notification-service` | Enviar un correo de confirmación no forma parte del ciclo de vida del pedido: es una reacción a lo que ocurre. Si hubiera fallado el envío del correo, no debería afectar la creación del pedido. |
 
 ---
 
@@ -933,13 +955,14 @@ La herencia se usa cuando existe una **jerarquía de tipos** con comportamiento 
 
 ### 6.1 Estrategias de desacoplamiento aplicadas
 
-| Estrategia | Aplicación en Fukusuke |
+| Estrategia | Cómo se aplica en Fukusuke |
 |---|---|
-| **Database per Service** | Cada microservicio tiene su propia base de datos. Ningún servicio accede directamente a la BD de otro. |
-| **Comunicación por ID** | `OrderItem` guarda `productId` (UUID), no una referencia al objeto `Product`. `Order` guarda `userId`, no el objeto `User`. |
-| **Comunicación síncrona (REST)** | Solo cuando se necesita respuesta inmediata: `order-service` → `payment-service` (el pago debe confirmarse antes de continuar). |
-| **Comunicación asíncrona (eventos)** | Para operaciones sin dependencia temporal: `order-service` emite `order.created` y `order.status_changed`; `notification-service` y `report-service` consumen los eventos. |
-| **Contratos de API (DTOs)** | Cada servicio expone solo DTOs en sus respuestas HTTP, nunca sus entidades internas. Los contratos son estables aunque la implementación interna cambie. |
+| **Comunicación por ID** | `OrderItem` guarda `productId` (UUID) en lugar de una referencia directa al objeto `Product`. `Order` guarda `userId` en lugar del objeto `User` completo. Así, cada módulo es autónomo. |
+| **Copia de datos en el momento de la transacción** | Cuando se crea un pedido, `OrderItem` almacena el nombre y precio del producto en ese instante. De esta forma, `order-service` no necesita consultar a `product-service` para mostrar pedidos históricos. |
+| **Comunicación síncrona solo cuando es necesario** | `order-service` llama a `payment-service` de forma sincrónica únicamente porque el resultado del pago determina si el pedido puede avanzar. Es la única dependencia directa entre servicios en tiempo de ejecución. |
+| **Comunicación asíncrona para operaciones secundarias** | Cuando se crea o actualiza un pedido, se emite un evento. `notification-service` y `report-service` reaccionan a ese evento de forma independiente, sin que `order-service` sepa que existen. |
+| **DTOs como contratos de API** | Cada servicio retorna DTOs en sus respuestas HTTP, nunca las entidades internas directamente. Si cambia la estructura interna de la entidad, el contrato externo puede mantenerse estable. |
+| **Módulos con entidades propias** | Cada módulo define sus propias entidades y repositorios. Ningún servicio importa entidades de otro módulo. |
 
 ### 6.2 Diagrama de dependencias entre servicios
 
@@ -948,167 +971,162 @@ flowchart LR
     AG[API Gateway]
     ORDER[order-service]
     PAY[payment-service]
-    PROD[product-service]
-    CART[cart-service]
-    MB[[Event Bus]]
+    MB[[Bus de Eventos]]
     NOTIF[notification-service]
     REPORT[report-service]
 
-    AG -->|JWT auth| ORDER
+    AG -->|JWT + REST| ORDER
     ORDER -->|sync REST: procesar pago| PAY
-    ORDER -.->|sync REST: consulta precios| PROD
-    ORDER -.->|sync REST: obtiene ítems del carrito| CART
     ORDER -->|async: order.created| MB
     ORDER -->|async: order.status_changed| MB
     MB -->|suscripción| NOTIF
     MB -->|suscripción| REPORT
 ```
 
-**Leyenda:** `→` dependencia síncrona (bloqueante), `-.->` consulta de solo lectura, `-->` evento asíncrono.
+> `order-service` no llama directamente a `product-service` ni a `cart-service` porque el cliente envía los datos del carrito en el cuerpo de la petición al crear el pedido. Esto elimina dependencias innecesarias.
 
-### 6.3 Dependencias permitidas y justificación
+### 6.3 Dependencias que se decidió mantener
 
-| Dependencia | Tipo | Justificación |
+| Dependencia | Tipo | Por qué se permite |
 |---|---|---|
-| `order-service` → `payment-service` | Sync REST | El resultado del pago determina si el pedido avanza a estado `PAGADO`. Es necesaria la respuesta inmediata. |
-| `order-service` → `product-service` | Sync REST (solo lectura) | Al crear el pedido se consulta el precio actual del producto para registrarlo en `OrderItem`. Solo ocurre una vez al crear. |
-| `order-service` → `cart-service` | Sync REST (solo lectura) | Para obtener los ítems y total del carrito al crear el pedido. Luego el carrito se vacía. |
+| `order-service` → `payment-service` | Síncrona (REST) | El resultado del pago determina si el pedido avanza o no. No es posible hacerlo asíncrono porque el usuario necesita saber en el momento si su pago fue aceptado. |
+| `auth-service` exporta `JwtAuthGuard` y `RolesGuard` | Dependencia de módulo | Todos los servicios necesitan validar el token JWT. Es una dependencia transversal y aceptable porque no implica lógica de negocio compartida, solo infraestructura de seguridad. |
 
-### 6.4 Dependencias descartadas y justificación
+### 6.4 Dependencias que se descartaron
 
-| Dependencia descartada | Razón |
+| Dependencia descartada | Por qué se eliminó |
 |---|---|
-| `payment-service` → `order-service` | El servicio de pago no debe conocer la lógica de pedidos. Solo procesa montos y registra resultados. |
-| `notification-service` → `order-service` (consulta directa) | Aumentaría el acoplamiento temporal. Si `order-service` falla, `notification-service` también fallaría. Con eventos asíncronos esto se evita. |
-| `report-service` → `order-service` (acceso directo a BD) | La BD de pedidos es privada de `order-service`. Los reportes se construyen con datos del bus de eventos, sin acceso a la BD operacional. |
-| Shared database (BD compartida entre servicios) | Crea acoplamiento estructural: cambiar el esquema de un servicio afecta a todos. |
+| `payment-service` → `order-service` | El servicio de pagos no necesita saber qué es un pedido. Solo recibe un monto, lo procesa y devuelve un resultado. Agregar esa dependencia habría creado un ciclo entre módulos. |
+| `notification-service` → `order-service` (consulta directa) | Si `notification-service` consultara directamente a `order-service` para obtener datos del pedido, un fallo en `order-service` arrastraría al de notificaciones. Con eventos asíncronos, ambos son independientes. |
+| `report-service` → `order-service` (acceso a BD) | La base de datos de pedidos es privada del `order-service`. Si `report-service` accediera directamente, cualquier cambio en el esquema de `order-service` podría romper los reportes. |
+| BD compartida entre todos los servicios | Una sola base de datos crea acoplamiento estructural: un cambio en la tabla de pedidos podría afectar las consultas de pagos o reportes. Con bases de datos separadas (o esquemas separados en la implementación actual), cada módulo es responsable solo de su propio esquema. |
 
 ---
 
 ## 7. Justificaciones Arquitectónicas
 
-### Decisión 1 — Arquitectura general: microservicios vs. monolito
+### Decisión 1 — Microservicios vs. monolito como arquitectura general
 
-**Decisión arquitectónica:** Definir la arquitectura general del backend de Fukusuke.
+**Decisión arquitectónica:** Definir la estructura general del backend de Fukusuke.
 
-**Alternativa A:** Construir un monolito en Node.js/Express con módulos internos separados por dominio.
+**Alternativa A:** Construir un monolito en Node.js con Express, organizando el código en módulos internos por dominio (auth, productos, pedidos, etc.) dentro de una sola aplicación.
 
-**Descarte:** Se descarta porque, aunque es más simple de desarrollar inicialmente, no permite escalar de forma independiente los servicios con mayor carga (el catálogo de productos recibe muchas más consultas que el módulo de reportes). Un fallo en el módulo de notificaciones derribaría toda la aplicación. Además, un cambio en el módulo de pagos requiere redeploy completo, aumentando el riesgo operacional.
+**Descarte:** Se descarta porque, aunque es más rápido de desarrollar al inicio, no permite escalar partes individuales del sistema de forma independiente. El catálogo de productos recibe muchas más consultas que el módulo de reportes, pero en un monolito ambos escalan juntos. Además, un error en el módulo de notificaciones podría derribar toda la aplicación.
 
-**Alternativa B:** Arquitectura de microservicios con servicios independientes por dominio.
+**Alternativa B:** Arquitectura de microservicios organizada por dominio de negocio, con comunicación REST y eventos.
 
 **Selección:** Se selecciona la Alternativa B.
 
-**Justificación:** Permite escalar `product-service` de forma independiente sin afectar `payment-service`. Mejora el aislamiento de fallos: si `notification-service` cae, los pedidos siguen procesándose. Cada servicio puede desplegarse, monitorearse y evolucionar de forma autónoma, mejorando la mantenibilidad y escalabilidad del sistema completo.
+**Justificación:** Permite escalar `product-service` de forma independiente sin tocar `payment-service`. Mejora el aislamiento de fallos: si `notification-service` falla, los pedidos siguen procesándose normalmente. Cada módulo puede evolucionar, desplegarse y probarse de forma autónoma, lo que mejora la mantenibilidad y la escalabilidad del sistema a largo plazo.
 
 ---
 
 ### Decisión 2 — Separar auth-service de user-service
 
-**Decisión arquitectónica:** División del manejo de usuarios en Fukusuke.
+**Decisión arquitectónica:** Cómo dividir las responsabilidades relacionadas con los usuarios.
 
-**Alternativa A:** Un único servicio (`user-auth-service`) que maneje tanto autenticación como perfil de usuario y direcciones.
+**Alternativa A:** Un solo servicio que gestione tanto la autenticación como el perfil del usuario y sus direcciones de despacho.
 
-**Descarte:** Se descarta porque mezcla responsabilidades con ciclos de cambio distintos. La autenticación es transversal (todos los demás servicios necesitan validar tokens), mientras que el perfil de usuario es una funcionalidad específica de negocio. Un cambio en cómo se almacenan las direcciones de despacho no debería afectar la lógica de validación JWT.
+**Descarte:** Se descarta porque mezcla dos dominios que cambian por razones distintas. La autenticación (tokens, contraseñas, roles) es transversal y relativamente estable. El perfil del usuario (direcciones, datos personales) cambia con más frecuencia y por motivos de negocio. Un cambio en cómo se guardan las direcciones no debería afectar la lógica de generación de JWT.
 
-**Alternativa B:** Dos servicios independientes: `auth-service` (tokens, login, roles) y `user-service` (perfil, direcciones).
+**Alternativa B:** Dos servicios separados: `auth-service` para credenciales y tokens, y `user-service` para perfil y direcciones.
 
 **Selección:** Se selecciona la Alternativa B.
 
-**Justificación:** Mejora la cohesión de ambos servicios: cada uno contiene solo lo relacionado a su propósito. Reduce el acoplamiento: el `auth-service` puede desplegarse con alta disponibilidad sin depender del `user-service`. Si en el futuro Fukusuke integra otra aplicación, puede reutilizar `auth-service` de forma aislada.
+**Justificación:** Cada servicio tiene mayor cohesión porque solo contiene lo que le corresponde. Reduce el acoplamiento: `auth-service` puede tener alta disponibilidad sin depender de `user-service`. A futuro, si se quiere integrar otra aplicación con el sistema de autenticación de Fukusuke, se puede reutilizar `auth-service` de forma aislada.
 
 ---
 
 ### Decisión 3 — Separar product-service de cart-service
 
-**Decisión arquitectónica:** Gestión del catálogo y del carrito de compras.
+**Decisión arquitectónica:** Gestión del catálogo de productos y del carrito de compras.
 
-**Alternativa A:** Un único servicio que gestione tanto el catálogo de productos como el estado del carrito.
+**Alternativa A:** Un solo servicio que maneje el catálogo de productos y el estado del carrito del usuario.
 
-**Descarte:** Se descarta porque el catálogo es un recurso de lectura intensiva y relativamente estático (muchos usuarios consultando el menú simultáneamente), mientras que el carrito es un estado efímero y mutable por usuario. Sus patrones de acceso, escalado y tecnología de almacenamiento óptima son distintos.
+**Descarte:** Se descarta porque ambas cosas tienen patrones de uso muy distintos. El catálogo es consultado constantemente por todos los usuarios al mismo tiempo y sus datos cambian poco. El carrito es un estado mutable y efímero, diferente por cada usuario. Juntarlos complica el escalado y mezcla dominios que no tienen relación directa.
 
 **Alternativa B:** `product-service` para el catálogo y `cart-service` para el carrito.
 
 **Selección:** Se selecciona la Alternativa B.
 
-**Justificación:** Permite cachear agresivamente el catálogo sin afectar el carrito. El `cart-service` puede usar Redis (almacenamiento en memoria) para mayor velocidad, mientras el `product-service` usa una base de datos relacional para consistencia. La alta cohesión de cada servicio facilita su mantenimiento independiente.
+**Justificación:** Permite aplicar estrategias distintas a cada servicio: el catálogo puede cachearse agresivamente, el carrito puede almacenarse en memoria (Redis). La alta cohesión de cada servicio hace que sea más fácil de mantener y evolucionar de forma independiente.
 
 ---
 
 ### Decisión 4 — Separar order-service de payment-service
 
-**Decisión arquitectónica:** División entre gestión de pedidos y procesamiento de pagos.
+**Decisión arquitectónica:** División entre la gestión de pedidos y el procesamiento de pagos.
 
-**Alternativa A:** El `order-service` procesa los pagos directamente como parte de la creación del pedido.
+**Alternativa A:** El `order-service` procesa los pagos directamente como parte de la confirmación del pedido.
 
-**Descarte:** Se descarta porque la lógica de pago es compleja, sensible a cambios regulatorios y evoluciona con frecuencia (nuevos medios de pago como Webpay Plus, billeteras digitales). Mezclarla con la lógica de pedidos aumenta el acoplamiento, dificulta agregar nuevos métodos y aumenta el riesgo de que un bug en pagos afecte la gestión de pedidos.
+**Descarte:** Se descarta porque la lógica de pago es sensible y cambia con frecuencia (nuevos medios de pago, cambios regulatorios). Mezclarla con la lógica de pedidos dificulta agregar nuevos métodos sin tocar el flujo del pedido y aumenta el riesgo de que un error en pagos afecte la creación de pedidos.
 
-**Alternativa B:** `payment-service` independiente, con el patrón Strategy implementado mediante herencia en `PaymentMethod`.
+**Alternativa B:** `payment-service` independiente, con el patrón de herencia en `PaymentMethod` para manejar los distintos métodos.
 
 **Selección:** Se selecciona la Alternativa B.
 
-**Justificación:** Permite agregar un nuevo método de pago (ej: Webpay Plus) como una nueva subclase de `PaymentMethod` sin modificar `order-service`. El patrón Strategy garantiza alta cohesión: cada clase concreta encapsula solo la lógica de su método de pago. Reduce el acoplamiento entre el ciclo de vida del pedido y el procesamiento financiero.
+**Justificación:** Agregar un nuevo método de pago (como Webpay Plus) es simplemente crear una nueva subclase de `PaymentMethod` sin tocar `order-service`. La cohesión de `payment-service` es alta porque todas sus clases giran en torno al cobro. El acoplamiento entre pedidos y pagos se reduce a una sola llamada REST.
 
 ---
 
-### Decisión 5 — Herencia en PaymentMethod vs. composición con objeto genérico
+### Decisión 5 — Herencia en PaymentMethod vs. campo genérico
 
-**Decisión arquitectónica:** Estructura interna para manejar múltiples métodos de pago.
+**Decisión arquitectónica:** Cómo modelar internamente los distintos métodos de pago dentro de `payment-service`.
 
-**Alternativa A:** Usar composición: `Payment` contiene un campo `methodData: object` genérico con los detalles del método.
+**Alternativa A:** `PaymentService` recibe el tipo de pago como un string y toma decisiones con `if/else` o `switch`, guardando los datos del método en un campo genérico.
 
-**Descarte:** Se descarta porque pierde el beneficio del tipado estático y el polimorfismo. Validar un pago con tarjeta requiere lógica diferente a validar una transferencia bancaria; con un objeto genérico, esa lógica quedaría concentrada en if/else dentro de `PaymentService`, reduciendo su cohesión y dificultando agregar nuevos métodos.
+**Descarte:** Se descarta porque concentra toda la lógica de pago en un solo lugar, lo que reduce la cohesión del servicio y lo hace más difícil de mantener. Cada vez que se agrega un método nuevo hay que modificar el `if/else` existente, lo que aumenta el riesgo de errores.
 
-**Alternativa B:** Usar herencia — `PaymentMethod` es abstracta; `CreditCardPayment`, `ServipagPayment` y `BankTransferPayment` heredan e implementan `process()` y `validate()`.
+**Alternativa B:** Clase abstracta `PaymentMethod` con los métodos `process()` y `validate()`, y tres subclases concretas: `CreditCardPayment`, `ServipagPayment` y `BankTransferPayment`.
 
 **Selección:** Se selecciona la Alternativa B.
 
-**Justificación:** El polimorfismo permite que `PaymentService.processPayment()` llame a `method.process(amount)` sin conocer el tipo concreto (Principio de Sustitución de Liskov). Agregar un nuevo método de pago es añadir una nueva subclase sin modificar código existente (Principio Open/Closed). Mejora la cohesión: cada subclase contiene exclusivamente la lógica relevante para su método. Reduce el acoplamiento de `PaymentService` respecto a las implementaciones concretas.
+**Justificación:** El polimorfismo permite que `PaymentService` llame a `method.process(amount)` sin importar qué tipo concreto sea. Agregar un nuevo método de pago es crear una subclase nueva sin modificar código existente. Cada clase concreta tiene alta cohesión porque solo contiene la lógica del método que representa. El acoplamiento de `PaymentService` con los métodos concretos es mínimo.
 
 ---
 
-### Decisión 6 — OrderItem copia datos del producto vs. referencia directa
+### Decisión 6 — OrderItem copia los datos del producto vs. referencia directa
 
-**Decisión arquitectónica:** Cómo `OrderItem` accede a la información del producto.
+**Decisión arquitectónica:** Cómo `OrderItem` accede a la información del producto que se compró.
 
-**Alternativa A:** `OrderItem` contiene una referencia directa al `Product` mediante FK o llamada síncrona a `product-service` en cada consulta.
+**Alternativa A:** `OrderItem` guarda una referencia directa al `Product` (ya sea como clave foránea o llamando a `product-service` en cada consulta de pedido).
 
-**Descarte:** Se descarta porque si el precio de un producto cambia en el catálogo, los pedidos históricos mostrarían precios incorrectos. Además, crea acoplamiento fuerte en tiempo de ejecución: consultar un pedido antiguo requeriría que `product-service` esté disponible, afectando la independencia de `order-service`.
+**Descarte:** Se descarta porque si el precio de un producto cambia en el catálogo, los pedidos históricos mostrarían un precio distinto al que el cliente pagó realmente. Además, si `product-service` estuviera caído, no se podrían consultar pedidos antiguos, lo que crea una dependencia innecesaria en tiempo de ejecución.
 
-**Alternativa B:** `OrderItem` copia los datos relevantes del producto en el momento de la compra: `productId`, `productName`, `unitPrice`.
+**Alternativa B:** `OrderItem` copia los datos relevantes del producto en el momento de la compra: `productId`, `productName` y `unitPrice`.
 
 **Selección:** Se selecciona la Alternativa B.
 
-**Justificación:** Los pedidos históricos conservan el precio exacto pagado, lo cual es correcto desde la perspectiva del negocio y cumplimiento (boletas, facturas). Reduce el acoplamiento: `order-service` puede responder consultas de pedidos antiguos sin depender de `product-service`. La composición `Order` ◆── `OrderItem` refleja que los ítems son parte inseparable del pedido y tienen ciclo de vida conjunto.
+**Justificación:** Los pedidos históricos conservan el precio exacto que el cliente pagó, lo que es correcto desde el punto de vista del negocio. `order-service` puede responder consultas de pedidos antiguos sin depender de que `product-service` esté disponible. Esto reduce el acoplamiento entre servicios y mejora la mantenibilidad del historial de compras.
 
 ---
 
 ### Decisión 7 — Comunicación asíncrona para notificaciones y reportes
 
-**Decisión arquitectónica:** Cómo `order-service` comunica eventos a `notification-service` y `report-service`.
+**Decisión arquitectónica:** Cómo `order-service` informa a `notification-service` y `report-service` sobre los eventos de pedidos.
 
-**Alternativa A:** Llamadas REST síncronas: cuando se crea un pedido, `order-service` llama directamente a `notification-service` y `report-service` antes de responder al cliente.
+**Alternativa A:** Llamadas REST síncronas: al crear un pedido, `order-service` llama directamente a `notification-service` y `report-service` antes de responder al cliente.
 
-**Descarte:** Se descarta porque si `notification-service` falla o tarda, la operación de crear un pedido también fallaría o se ralentizaría, aunque el email de confirmación no es crítico para la transacción principal. Aumenta el acoplamiento temporal: `order-service` debe conocer las URLs de todos los servicios que "reaccionan" a sus eventos.
+**Descarte:** Se descarta porque si `notification-service` falla o responde lento, la creación del pedido también fallaría o demoraría, aunque el correo de confirmación no es crítico para la transacción. Además, `order-service` tendría que conocer las URLs de todos los servicios que reaccionan a sus eventos, lo que aumenta el acoplamiento.
 
-**Alternativa B:** Bus de eventos asíncrono: `order-service` emite eventos (`order.created`, `order.status_changed`) y los servicios interesados los consumen de forma independiente.
+**Alternativa B:** Bus de eventos asíncrono: `order-service` emite eventos (`order.created`, `order.status_changed`) y los servicios interesados reaccionan de forma independiente.
 
 **Selección:** Se selecciona la Alternativa B.
 
-**Justificación:** El pedido se crea exitosamente independientemente del estado del `notification-service`. Reduce el acoplamiento: `order-service` no necesita saber qué servicios están escuchando. Nuevos servicios pueden suscribirse a eventos sin modificar `order-service`, lo que mejora la mantenibilidad (Open/Closed). Aumenta la resiliencia: si `report-service` cae temporalmente, procesará los eventos acumulados al recuperarse.
+**Justificación:** El pedido se crea correctamente sin importar el estado de `notification-service`. `order-service` no necesita saber que `notification-service` o `report-service` existen: solo emite el evento. Si se agrega un nuevo servicio que reaccione a pedidos en el futuro, no hay que modificar `order-service`. Esto mejora la mantenibilidad y reduce significativamente el acoplamiento entre módulos.
 
 ---
 
-### Decisión 8 — Database per Service vs. base de datos compartida
+### Decisión 8 — Base de datos por servicio vs. base de datos compartida
 
-**Decisión arquitectónica:** Estrategia de persistencia de datos entre microservicios.
+**Decisión arquitectónica:** Estrategia de persistencia de datos en la arquitectura.
 
-**Alternativa A:** Una única base de datos PostgreSQL compartida con esquemas separados por microservicio.
+**Alternativa A:** Una única base de datos PostgreSQL compartida entre todos los microservicios, con tablas o esquemas separados por servicio.
 
-**Descarte:** Se descarta porque, aunque simplifica la operación inicial, crea acoplamiento estructural: cambiar el esquema de tablas de `order-service` puede afectar queries de `payment-service` si comparten la misma BD. Elimina la posibilidad de usar tecnologías de almacenamiento especializadas por servicio. Un problema de rendimiento en la BD afecta a todos los servicios simultáneamente.
+**Descarte:** Se descarta porque, aunque simplifica el despliegue inicial, crea acoplamiento estructural: un cambio en el esquema de la tabla `orders` podría afectar consultas de `payment-service` si acceden a la misma BD. También impide usar tecnologías distintas según las necesidades de cada servicio.
 
-**Alternativa B:** Cada microservicio tiene su propia base de datos (patrón Database per Service).
+**Alternativa B:** Cada microservicio es responsable de sus propias entidades y no accede a las tablas de otro servicio (patrón Database per Service).
 
 **Selección:** Se selecciona la Alternativa B.
 
-**Justificación:** Garantiza el aislamiento total entre servicios: los esquemas evolucionan de forma independiente sin coordinación entre equipos. El `cart-service` puede usar Redis para máxima velocidad; el `report-service` puede usar almacenamiento columnar para analítica eficiente; los servicios operacionales pueden usar PostgreSQL relacional. Reduce el acoplamiento estructural a cero entre servicios y mejora la escalabilidad al permitir escalar la BD de cada servicio de forma independiente según su carga.
+**Justificación:** Cada módulo puede evolucionar su esquema de forma independiente sin coordinación con otros equipos. Es posible usar Redis para el carrito (alta velocidad de lectura/escritura), PostgreSQL para pedidos (consistencia transaccional) y almacenamiento distinto para reportes, sin que un servicio afecte al otro. Esto mejora la escalabilidad y reduce el acoplamiento estructural entre módulos.
