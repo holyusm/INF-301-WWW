@@ -7,6 +7,8 @@ import { Order } from './entities/order.entity';
 import { OrderItem, OrderStatus } from './entities/order-item.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
+import { PaymentsService } from '../payments/payments.service';
+import { PaymentStatus } from '../payments/entities/payment.entity';
 
 const mockOrderRepo = () => ({
   create: jest.fn(),
@@ -21,6 +23,7 @@ const mockItemRepo = () => ({
 });
 
 const mockEventEmitter = { emit: jest.fn() };
+const mockPaymentsService = { processPayment: jest.fn() };
 
 describe('OrdersService', () => {
   let service: OrdersService;
@@ -36,6 +39,7 @@ describe('OrdersService', () => {
         { provide: getRepositoryToken(Order), useFactory: mockOrderRepo },
         { provide: getRepositoryToken(OrderItem), useFactory: mockItemRepo },
         { provide: EventEmitter2, useValue: mockEventEmitter },
+        { provide: PaymentsService, useValue: mockPaymentsService },
       ],
     }).compile();
 
@@ -127,6 +131,56 @@ describe('OrdersService', () => {
         userId: 'user-1',
         total: 8000,
       });
+    });
+
+    it('should process payment and transition to PAGADO when paymentData is provided and payment succeeds', async () => {
+      const dto: CreateOrderDto = {
+        deliveryAddress: 'Av. Principal 123',
+        paymentMethod: 'tarjeta',
+        total: 12000,
+        items: [{ productId: 'p1', productName: 'Roll', unitPrice: 12000, quantity: 1 }],
+        paymentData: { methodType: 'tarjeta', cardNumber: '4111111111111111', expiryDate: '12/27' },
+      };
+      const savedOrder = { id: 'o-paid', userId: 'u1', total: 12000, status: OrderStatus.PENDIENTE };
+
+      itemRepo.create.mockReturnValue(dto.items[0]);
+      orderRepo.create.mockReturnValue(savedOrder);
+      orderRepo.save.mockResolvedValue(savedOrder);
+      mockPaymentsService.processPayment.mockResolvedValue({
+        status: PaymentStatus.APROBADO,
+        transactionId: 'TX-1',
+      });
+
+      await service.createOrder('u1', dto);
+
+      expect(mockPaymentsService.processPayment).toHaveBeenCalledWith(
+        expect.objectContaining({ orderId: 'o-paid', amount: 12000, methodType: 'tarjeta' }),
+      );
+      expect(mockEventEmitter.emit).toHaveBeenCalledWith('order.paid', expect.objectContaining({ orderId: 'o-paid' }));
+    });
+
+    it('should leave order in PENDIENTE when payment fails', async () => {
+      const dto: CreateOrderDto = {
+        deliveryAddress: 'Calle Falsa 123',
+        paymentMethod: 'tarjeta',
+        total: 5000,
+        items: [{ productId: 'p2', productName: 'Nigiri', unitPrice: 5000, quantity: 1 }],
+        paymentData: { methodType: 'tarjeta', cardNumber: '', expiryDate: '' },
+      };
+      const savedOrder = { id: 'o-fail', userId: 'u2', total: 5000, status: OrderStatus.PENDIENTE };
+
+      itemRepo.create.mockReturnValue(dto.items[0]);
+      orderRepo.create.mockReturnValue(savedOrder);
+      orderRepo.save.mockResolvedValue(savedOrder);
+      mockPaymentsService.processPayment.mockResolvedValue({
+        status: PaymentStatus.RECHAZADO,
+        transactionId: 'TX-FAIL',
+      });
+
+      const result = await service.createOrder('u2', dto);
+
+      expect(result.status).toBe(OrderStatus.PENDIENTE);
+      expect(mockEventEmitter.emit).not.toHaveBeenCalledWith('order.paid', expect.anything());
     });
   });
 

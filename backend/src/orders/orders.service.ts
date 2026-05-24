@@ -11,6 +11,8 @@ import { Order } from './entities/order.entity';
 import { OrderItem, OrderStatus } from './entities/order-item.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
+import { PaymentsService } from '../payments/payments.service';
+import { PaymentStatus } from '../payments/entities/payment.entity';
 
 /** Valid transitions: key -> set of allowed next states */
 const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
@@ -36,6 +38,7 @@ export class OrdersService {
     @InjectRepository(OrderItem)
     private readonly itemRepo: Repository<OrderItem>,
     private readonly eventEmitter: EventEmitter2,
+    private readonly paymentsService: PaymentsService,
   ) {}
 
   async createOrder(userId: string, dto: CreateOrderDto): Promise<Order> {
@@ -65,6 +68,26 @@ export class OrdersService {
       userId: saved.userId,
       total: saved.total,
     });
+
+    // Si el cliente envió datos de pago, procesar el cobro de forma síncrona
+    if (dto.paymentData) {
+      const payment = await this.paymentsService.processPayment({
+        orderId: saved.id,
+        amount: saved.total,
+        ...dto.paymentData,
+      });
+
+      if (payment.status === PaymentStatus.APROBADO) {
+        saved.status = OrderStatus.PAGADO;
+        await this.orderRepo.save(saved);
+
+        this.eventEmitter.emit('order.paid', {
+          orderId: saved.id,
+          userId: saved.userId,
+          amount: saved.total,
+        });
+      }
+    }
 
     return saved;
   }
