@@ -31,7 +31,11 @@ El **frontend** (Vite + React) vive en la raíz. El **backend** (NestJS) vive en
 - **Cachés y artefactos compilados:** `dist/`, `build/`, `*.tsbuildinfo`, `coverage/`, `vite.config.js` (generado desde `.ts`).
 - **Configuración de asistentes IA locales:** `.claude/`, `.cursor/`, `.aider*`.
 
-Si necesitas documentar variables nuevas, agrégalas a `backend/.env.example` con valor placeholder. Nunca al `.env` real.
+Si necesitas documentar variables nuevas:
+- Variables del **backend** → `backend/.env.example`
+- Variables del **frontend** → `.env.example` en la raíz
+
+Nunca al `.env` real ni a ningún archivo `.env.local`.
 
 ---
 
@@ -101,13 +105,37 @@ Mensaje en español. Cuerpo del commit puede listar cambios concretos con bullet
 - Componentes en `src/components/`, páginas en `src/pages/`.
 - Estilos con Bootstrap + clases custom; no agregar nuevos frameworks de CSS sin discutir.
 - No hardcodear URLs del backend — usar variable de entorno `VITE_API_URL` (definir en `.env.local`, nunca commitear).
+- Build de producción: `npm run build` en la raíz → genera `dist/` (ignorado en git).
 
 ---
 
-## 7. Antes de cerrar una tarea
+## 7. Despliegue
+
+### Backend → Railway
+- Archivo de configuración: `backend/railway.json`
+- Variables de entorno requeridas en el dashboard de Railway:
+  - `DATABASE_URL` — generada automáticamente por el plugin PostgreSQL de Railway
+  - `JWT_SECRET` — string largo y aleatorio
+  - `JWT_EXPIRES_IN` — ej. `7d`
+  - `NODE_ENV` — `production`
+- Comando de inicio: `npm run start:prod`
+- La BD se sincroniza automáticamente en el primer arranque (`synchronize` activo solo en producción si `NODE_ENV !== production`).
+
+### Frontend → Vercel
+- Archivo de configuración: `vercel.json` en la raíz
+- Variables de entorno requeridas en el dashboard de Vercel:
+  - `VITE_API_URL` — URL del backend en Railway, ej. `https://fukusuke-api.up.railway.app/api`
+  - `VITE_EMAILJS_SERVICE_ID`, `VITE_EMAILJS_TEMPLATE_ID`, `VITE_EMAILJS_PUBLIC_KEY` — si se usa EmailJS
+  - `VITE_ABSTRACT_API_KEY` — si se usa validación de email
+- Directorio de salida: `dist/`
+- Framework: Vite
+
+---
+
+## 8. Antes de cerrar una tarea
 
 - [ ] Tests pasan (`backend`: `npm test` → 106 ok)
-- [ ] Build limpio (`backend`: `npm run build` sin errores)
+- [ ] Build limpio: `backend/npm run build` (TypeScript) y `npm run build` en raíz (Vite)
 - [ ] Sin archivos sensibles en el commit (revisar `git status` antes de `git add`)
 - [ ] `BackEnd-Arquitectura.md` actualizado si tocaste arquitectura
 - [ ] Mensaje de commit en formato `tipo(scope): descripción`
