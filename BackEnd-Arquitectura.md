@@ -515,8 +515,8 @@ flowchart TD
     ORDER -->|order.status_changed| MB
     ORDER -->|order.paid| MB
     ORDER -->|order.cancelled| MB
-    MB -->|@OnEvent: order.created / status_changed / cancelled| NOTIF
-    MB -->|@OnEvent: order.paid| REPORT
+    MB -- "@OnEvent: order.created / status_changed / cancelled" --> NOTIF
+    MB -- "@OnEvent: order.paid" --> REPORT
 
     AUTH --- DB_ALL
     USER --- DB_ALL
