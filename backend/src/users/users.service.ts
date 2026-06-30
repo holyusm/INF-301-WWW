@@ -25,6 +25,18 @@ export class UsersService {
     return profile;
   }
 
+  async findById(id: string): Promise<UserProfile | null> {
+    return this.profileRepo.findOneBy({ id });
+  }
+
+  async findByRun(run: string): Promise<UserProfile | null> {
+    return this.profileRepo.findOneBy({ run });
+  }
+
+  async createProfile(data: Partial<UserProfile>): Promise<UserProfile> {
+    return this.profileRepo.save(this.profileRepo.create(data));
+  }
+
   async updateProfile(id: string, dto: UpdateUserDto): Promise<UserProfile> {
     const profile = await this.getUserById(id);
     Object.assign(profile, dto);

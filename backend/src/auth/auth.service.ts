@@ -2,14 +2,13 @@ import {
   Injectable,
   ConflictException,
   UnauthorizedException,
-  NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { Credential, UserRole } from './entities/credential.entity';
-import { UserProfile } from '../users/entities/user-profile.entity';
+import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 
@@ -18,8 +17,7 @@ export class AuthService {
   constructor(
     @InjectRepository(Credential)
     private readonly credentialRepo: Repository<Credential>,
-    @InjectRepository(UserProfile)
-    private readonly profileRepo: Repository<UserProfile>,
+    private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
   ) {}
 
@@ -27,22 +25,20 @@ export class AuthService {
     const existingEmail = await this.credentialRepo.findOneBy({ email: dto.email });
     if (existingEmail) throw new ConflictException('Email ya registrado');
 
-    const existingRun = await this.profileRepo.findOneBy({ run: dto.run });
+    const existingRun = await this.usersService.findByRun(dto.run);
     if (existingRun) throw new ConflictException('RUN ya registrado');
 
-    const profile = await this.profileRepo.save(
-      this.profileRepo.create({
-        run: dto.run,
-        fullName: dto.fullName,
-        phone: dto.phone,
-        address: dto.address,
-        commune: dto.commune,
-        province: dto.province,
-        region: dto.region,
-        birthDate: dto.birthDate,
-        gender: dto.gender,
-      }),
-    );
+    const profile = await this.usersService.createProfile({
+      run: dto.run,
+      fullName: dto.fullName,
+      phone: dto.phone,
+      address: dto.address,
+      commune: dto.commune,
+      province: dto.province,
+      region: dto.region,
+      birthDate: dto.birthDate,
+      gender: dto.gender,
+    });
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
     const credential = await this.credentialRepo.save(
@@ -80,7 +76,7 @@ export class AuthService {
     const valid = await bcrypt.compare(dto.password, credential.passwordHash);
     if (!valid) throw new UnauthorizedException('Credenciales inválidas');
 
-    const profile = await this.profileRepo.findOneBy({ id: credential.userId });
+    const profile = await this.usersService.findById(credential.userId);
 
     return {
       user: {
@@ -99,8 +95,7 @@ export class AuthService {
   }
 
   async getMe(userId: string) {
-    const profile = await this.profileRepo.findOneBy({ id: userId });
-    if (!profile) throw new NotFoundException('Usuario no encontrado');
+    const profile = await this.usersService.getUserById(userId);
 
     const credential = await this.credentialRepo.findOneBy({ userId });
 

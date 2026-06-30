@@ -55,7 +55,7 @@ Si rompes algo, **no commitees** — investiga y arregla la causa raíz. No uses
 
 1. **Cada módulo es un microservicio lógico.** Ningún módulo importa entidades de otro. Los 8 módulos son: `auth`, `users`, `products`, `cart`, `orders`, `payments`, `notifications`, `reports`.
 
-2. **Excepción documentada:** `auth` accede a `UserProfile` (de `users/`) y `Credential` (propia) directamente, porque el registro debe crear ambas en una transacción. Esta dependencia está justificada en `BackEnd-Arquitectura.md` Decisión 2.
+2. **auth ↔ users:** `auth` gestiona únicamente la entidad `Credential` (propia). El registro crea también el `UserProfile`, pero `auth-service` lo hace **delegando en `UsersService`** (`createProfile`, `findByRun`, `findById`) — no importa la entidad `UserProfile` ni accede a su tabla. Como `users` además consume los guards de `auth`, ambos módulos se referencian con `forwardRef`. Justificado en `BackEnd-Arquitectura.md` Decisión 2.
 
 3. **Comunicación entre módulos:**
    - **Síncrona (REST):** solo `orders → payments` cuando el cliente envía `paymentData` en `POST /api/orders`.

@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { AuthService } from './auth.service';
+import { UsersService } from '../users/users.service';
 import { Credential, UserRole } from './entities/credential.entity';
 import { UserProfile, UserGender } from '../users/entities/user-profile.entity';
 
@@ -20,10 +21,11 @@ const mockCredentialRepo = {
   save: jest.fn(),
 };
 
-const mockProfileRepo = {
-  findOneBy: jest.fn(),
-  create: jest.fn(),
-  save: jest.fn(),
+const mockUsersService = {
+  findById: jest.fn(),
+  findByRun: jest.fn(),
+  createProfile: jest.fn(),
+  getUserById: jest.fn(),
 };
 
 const mockJwtService = {
@@ -64,7 +66,7 @@ describe('AuthService', () => {
       providers: [
         AuthService,
         { provide: getRepositoryToken(Credential), useValue: mockCredentialRepo },
-        { provide: getRepositoryToken(UserProfile), useValue: mockProfileRepo },
+        { provide: UsersService, useValue: mockUsersService },
         { provide: JwtService, useValue: mockJwtService },
       ],
     }).compile();
@@ -76,10 +78,9 @@ describe('AuthService', () => {
   describe('register', () => {
     it('registra un nuevo usuario y retorna token', async () => {
       mockCredentialRepo.findOneBy.mockResolvedValue(null);
-      mockProfileRepo.findOneBy.mockResolvedValue(null);
+      mockUsersService.findByRun.mockResolvedValue(null);
       (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-password');
-      mockProfileRepo.create.mockReturnValue(baseProfile);
-      mockProfileRepo.save.mockResolvedValue(baseProfile);
+      mockUsersService.createProfile.mockResolvedValue(baseProfile);
       mockCredentialRepo.create.mockReturnValue(baseCredential);
       mockCredentialRepo.save.mockResolvedValue(baseCredential);
 
@@ -119,7 +120,7 @@ describe('AuthService', () => {
 
     it('lanza ConflictException cuando el RUN ya existe', async () => {
       mockCredentialRepo.findOneBy.mockResolvedValueOnce(null);
-      mockProfileRepo.findOneBy.mockResolvedValueOnce(baseProfile);
+      mockUsersService.findByRun.mockResolvedValueOnce(baseProfile);
 
       await expect(
         service.register({
@@ -142,7 +143,7 @@ describe('AuthService', () => {
     it('retorna usuario y token con credenciales válidas', async () => {
       mockCredentialRepo.findOne.mockResolvedValue({ ...baseCredential, passwordHash: 'hashed-password' });
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-      mockProfileRepo.findOneBy.mockResolvedValue(baseProfile);
+      mockUsersService.findById.mockResolvedValue(baseProfile);
 
       const result = await service.login({
         email: 'taro@fukusuke.cl',
@@ -174,7 +175,7 @@ describe('AuthService', () => {
   // ------------------------------------------------------------------- getMe
   describe('getMe', () => {
     it('retorna el perfil y credenciales del usuario', async () => {
-      mockProfileRepo.findOneBy.mockResolvedValue(baseProfile);
+      mockUsersService.getUserById.mockResolvedValue(baseProfile);
       mockCredentialRepo.findOneBy.mockResolvedValue(baseCredential);
 
       const result = await service.getMe('profile-uuid-1');
@@ -185,7 +186,9 @@ describe('AuthService', () => {
     });
 
     it('lanza NotFoundException cuando el usuario no existe', async () => {
-      mockProfileRepo.findOneBy.mockResolvedValue(null);
+      mockUsersService.getUserById.mockRejectedValue(
+        new NotFoundException('Usuario no encontrado'),
+      );
 
       await expect(service.getMe('no-existe')).rejects.toThrow(NotFoundException);
     });
