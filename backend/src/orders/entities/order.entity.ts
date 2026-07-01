@@ -16,6 +16,12 @@ export class Order {
   @Column()
   userId: string;
 
+  @Column()
+  customerName: string;
+
+  @Column()
+  customerEmail: string;
+
   @Column({
     type: 'enum',
     enum: OrderStatus,

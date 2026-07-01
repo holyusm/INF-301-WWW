@@ -80,7 +80,7 @@ describe('OrdersService', () => {
       orderRepo.create.mockReturnValue(builtOrder);
       orderRepo.save.mockResolvedValue(savedOrder);
 
-      const result = await service.createOrder('user-1', dto);
+      const result = await service.createOrder('user-1', dto, 'Cliente Uno', 'uno@fukusuke.cl');
 
       expect(itemRepo.create).toHaveBeenCalledWith({
         productId: 'prod-1',
@@ -124,7 +124,7 @@ describe('OrdersService', () => {
       orderRepo.create.mockReturnValue(savedOrder);
       orderRepo.save.mockResolvedValue(savedOrder);
 
-      await service.createOrder('user-1', dto);
+      await service.createOrder('user-1', dto, 'Cliente Uno', 'uno@fukusuke.cl');
 
       expect(mockEventEmitter.emit).toHaveBeenCalledWith('order.created', {
         orderId: 'order-emit-test',
@@ -151,7 +151,7 @@ describe('OrdersService', () => {
         transactionId: 'TX-1',
       });
 
-      await service.createOrder('u1', dto);
+      await service.createOrder('u1', dto, 'Cliente Uno', 'uno@fukusuke.cl');
 
       expect(mockPaymentsService.processPayment).toHaveBeenCalledWith(
         expect.objectContaining({ orderId: 'o-paid', amount: 12000, methodType: 'tarjeta' }),
@@ -177,7 +177,7 @@ describe('OrdersService', () => {
         transactionId: 'TX-FAIL',
       });
 
-      const result = await service.createOrder('u2', dto);
+      const result = await service.createOrder('u2', dto, 'Cliente Dos', 'dos@fukusuke.cl');
 
       expect(result.status).toBe(OrderStatus.PENDIENTE);
       expect(mockEventEmitter.emit).not.toHaveBeenCalledWith('order.paid', expect.anything());
@@ -288,11 +288,21 @@ describe('OrdersService', () => {
       expect(result.status).toBe(OrderStatus.PAGADO);
     });
 
-    it('should throw ForbiddenException when cajero tries to change to PREPARANDO', async () => {
+    it('should allow cajero to change status from PAGADO to PREPARANDO', async () => {
       const order = { id: 'o1', status: OrderStatus.PAGADO };
       orderRepo.findOne.mockResolvedValue(order);
+      orderRepo.save.mockResolvedValue({ ...order, status: OrderStatus.PREPARANDO });
 
       const dto: UpdateStatusDto = { status: OrderStatus.PREPARANDO };
+      const result = await service.updateStatus('o1', dto, 'cajero');
+      expect(result.status).toBe(OrderStatus.PREPARANDO);
+    });
+
+    it('should throw ForbiddenException when cajero tries to change to EN_CAMINO', async () => {
+      const order = { id: 'o1', status: OrderStatus.PREPARANDO };
+      orderRepo.findOne.mockResolvedValue(order);
+
+      const dto: UpdateStatusDto = { status: OrderStatus.EN_CAMINO };
       await expect(
         service.updateStatus('o1', dto, 'cajero'),
       ).rejects.toThrow();

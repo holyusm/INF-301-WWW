@@ -249,7 +249,7 @@ pendiente → anulado
 | Rol | Puede transicionar a |
 |---|---|
 | `admin` / `dueno` | Cualquier transición válida |
-| `cajero` | `pagado` |
+| `cajero` | `pagado`, `preparando` |
 | `despachador` | `en_camino`, `entregado` |
 
 **Endpoints:**
@@ -623,6 +623,8 @@ classDiagram
         class Order {
             +UUID id
             +UUID userId
+            +String customerName
+            +String customerEmail
             +OrderStatus status
             +Number total
             +String deliveryAddress
@@ -1035,6 +1037,8 @@ classDiagram
     class Order {
         +UUID id
         +UUID userId
+        +String customerName
+        +String customerEmail
         +OrderStatus status
         +Number total
         +String deliveryAddress
@@ -1368,7 +1372,7 @@ Todos los microservicios implementados siguen la misma estructura interna. Se el
 ### 4.2 Ejemplo concreto — order-service
 
 - **`OrderController`**: recibe `POST /orders` con el JWT del usuario en el header, extrae el `userId` del token y pasa el DTO al servicio. Si el pedido se crea correctamente, responde con HTTP 201. Si hay un error de validación, responde con 400.
-- **`OrderService`**: contiene la lógica de la máquina de estados. Verifica que la transición solicitada es válida (por ejemplo, no se puede pasar de ENTREGADO a PREPARANDO), aplica restricciones por rol (el cajero solo puede marcar como PAGADO), guarda el cambio, emite eventos al bus y — si el DTO incluye `paymentData` — llama a `PaymentsService.processPayment()` de forma síncrona.
+- **`OrderService`**: contiene la lógica de la máquina de estados. Verifica que la transición solicitada es válida (por ejemplo, no se puede pasar de ENTREGADO a PREPARANDO), aplica restricciones por rol (el cajero solo puede marcar como PAGADO o PREPARANDO), guarda el cambio, emite eventos al bus y — si el DTO incluye `paymentData` — llama a `PaymentsService.processPayment()` de forma síncrona.
 - **Repositorio (TypeORM)**: el rol Repository se cumple mediante el `Repository<Order>` genérico inyectado con `@InjectRepository(Order)`. El servicio llama `findOne()`, `save()` o `find()` sin escribir SQL directamente.
 - **`Order` / `OrderItem`**: entidades TypeORM que definen la estructura de las tablas y el método `getSubtotal()` en `OrderItem`.
 
@@ -1566,6 +1570,8 @@ flowchart LR
 **Selección:** Se selecciona la Alternativa B.
 
 **Justificación:** Los pedidos históricos conservan el precio exacto que el cliente pagó, lo que es correcto desde el punto de vista del negocio. `order-service` puede responder consultas de pedidos antiguos sin depender de que `product-service` esté disponible. Esto reduce el acoplamiento entre servicios y mejora la mantenibilidad del historial de compras.
+
+**Mismo patrón aplicado a `customerName`/`customerEmail`:** por la misma razón, `Order` no consulta `user-service` para mostrar el nombre del cliente en los paneles de cajero/despachador/admin (eso violaría el invariante de que ningún módulo importa entidades de otro). En vez de eso, `auth-service` incluye `fullName` en el payload del JWT al emitirlo (ya tiene el perfil a mano vía `UsersService` en `register`/`login`), y `order-service` copia `customerName`/`customerEmail` desde el token al crear el pedido. `orders` sigue sin depender de `users` en tiempo de ejecución.
 
 ---
 

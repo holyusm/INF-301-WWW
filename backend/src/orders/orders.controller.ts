@@ -25,7 +25,12 @@ export class OrdersController {
   /** POST /orders — authenticated users create their own order */
   @Post()
   createOrder(@Request() req: any, @Body() dto: CreateOrderDto) {
-    return this.ordersService.createOrder(req.user.id, dto);
+    return this.ordersService.createOrder(
+      req.user.id,
+      dto,
+      req.user.fullName,
+      req.user.email,
+    );
   }
 
   /** GET /orders — admin / cajero / dueno see all orders */

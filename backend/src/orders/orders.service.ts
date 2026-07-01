@@ -26,7 +26,7 @@ const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
 
 /** Roles that may call updateStatus and what transitions they are allowed */
 const ROLE_ALLOWED_TARGETS: Record<string, OrderStatus[]> = {
-  cajero: [OrderStatus.PAGADO],
+  cajero: [OrderStatus.PAGADO, OrderStatus.PREPARANDO],
   despachador: [OrderStatus.EN_CAMINO, OrderStatus.ENTREGADO],
 };
 
@@ -41,7 +41,12 @@ export class OrdersService {
     private readonly paymentsService: PaymentsService,
   ) {}
 
-  async createOrder(userId: string, dto: CreateOrderDto): Promise<Order> {
+  async createOrder(
+    userId: string,
+    dto: CreateOrderDto,
+    customerName: string,
+    customerEmail: string,
+  ): Promise<Order> {
     const items = dto.items.map((itemDto) => {
       const item = this.itemRepo.create({
         productId: itemDto.productId,
@@ -54,6 +59,8 @@ export class OrdersService {
 
     const order = this.orderRepo.create({
       userId,
+      customerName,
+      customerEmail,
       deliveryAddress: dto.deliveryAddress,
       paymentMethod: dto.paymentMethod,
       total: dto.total,

@@ -61,6 +61,7 @@ export class AuthService {
         sub: profile.id,
         role: credential.role,
         email: credential.email,
+        fullName: profile.fullName,
       }),
     };
   }
@@ -90,6 +91,7 @@ export class AuthService {
         sub: credential.userId,
         role: credential.role,
         email: credential.email,
+        fullName: profile.fullName,
       }),
     };
   }
