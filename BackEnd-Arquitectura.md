@@ -1,6 +1,6 @@
 # Diseño de Microservicios — Fukusuke BackEnd
 
-> Documento actualizado el 2026-05-24. Refleja el código real en la rama `main` (commit base `457f919`).
+> Documento actualizado el 2026-06-30. Refleja el código real en la rama `main` (commit base `6ec7f36`, desacople auth↔users).
 
 ---
 
@@ -71,7 +71,7 @@ AppModule
 
 **JWT payload:** `{ sub: userId, role, email }` — mapeado a `req.user = { id, email, role }`.
 
-**Flujo de registro:** verifica unicidad de email y RUN → persiste `UserProfile` → hashea contraseña (bcrypt salt 10) → persiste `Credential` → retorna usuario combinado + token.
+**Flujo de registro:** verifica unicidad de email (en `credentials`) y de RUN (delegando en `UsersService.findByRun`) → crea el `UserProfile` **delegando en `UsersService.createProfile`** (auth no toca la tabla `user_profiles`) → hashea contraseña (bcrypt salt 10) → persiste `Credential` → retorna usuario combinado + token. Ver la tensión de atomicidad en Decisión 2.
 
 **Guards y decoradores exportados:** `JwtAuthGuard`, `RolesGuard`, `@Roles(...)`.
 
@@ -477,10 +477,6 @@ El siguiente diagrama muestra cómo se comunican los microservicios entre sí y 
 flowchart TD
     Client([Cliente Web / Fukusuke Frontend])
 
-    subgraph Gateway["API Gateway"]
-        AG[/Enrutador + Validación JWT/]
-    end
-
     subgraph Core["Microservicios Core"]
         AUTH[auth-service]
         USER[user-service]
@@ -503,12 +499,11 @@ flowchart TD
         MB[[Bus de Eventos]]
     end
 
-    Client --> AG
-    AG -->|REST| AUTH
-    AG -->|REST| USER
-    AG -->|REST| PROD
-    AG -->|REST| CART
-    AG -->|REST| ORDER
+    Client -->|"REST /api + JWT por controlador"| AUTH
+    Client -->|"REST /api + JWT por controlador"| USER
+    Client -->|"REST /api + JWT por controlador"| PROD
+    Client -->|"REST /api + JWT por controlador"| CART
+    Client -->|"REST /api + JWT por controlador"| ORDER
 
     ORDER -->|REST sync: paymentData opcional| PAY
     ORDER -->|order.created| MB
@@ -528,7 +523,7 @@ flowchart TD
     REPORT --- DB_ALL
 ```
 
-> **Nota sobre el API Gateway:** En esta implementación el "API Gateway" es lógico — corresponde al prefijo global `/api` de NestJS más `JwtAuthGuard` aplicado por controlador. Un despliegue distribuido real requeriría un gateway dedicado (NGINX, Kong, Traefik), lo que está documentado como evolución futura.
+> **Nota sobre el API Gateway:** El diagrama **no dibuja un componente "API Gateway"** porque en esta implementación no existe ninguno desplegado. El rol de gateway lo cumple, de forma puramente lógica, el **prefijo global `/api`** de NestJS más el **`JwtAuthGuard` aplicado por controlador**: el cliente llama directamente a cada microservicio (módulo) por su ruta `/api/...` y la validación del JWT ocurre en el guard de cada controlador. Un despliegue distribuido real sí requeriría un gateway dedicado (NGINX, Kong, Traefik), lo que queda documentado como evolución futura.
 
 > **Nota sobre la base de datos:** Todos los módulos comparten una conexión PostgreSQL única. La separación es real a nivel de tablas: cada módulo registra sus propias entidades vía `TypeOrmModule.forFeature([...])` y ningún servicio consulta tablas de otro módulo. La estrategia Database per Service se aplica como separación lógica.
 
@@ -536,183 +531,185 @@ flowchart TD
 
 ### 1.3 Diagrama de Clases del Dominio
 
-Este diagrama muestra todas las clases principales del sistema, sus atributos, métodos y las relaciones entre ellas. Las relaciones entre servicios se representan mediante IDs (UUID) para evitar dependencias directas entre módulos.
+Este diagrama muestra todas las clases principales del sistema, sus atributos, métodos y las relaciones entre ellas. Cada microservicio se dibuja como un **boundary visual** mediante un `namespace` de Mermaid, de modo que se vea con claridad qué clases pertenecen a cada uno de los 8 servicios. Las relaciones entre servicios se representan mediante IDs (UUID) para evitar dependencias directas entre módulos.
 
 ```mermaid
 classDiagram
-    direction TB
-
-    class Credential {
-        +UUID id
-        +String email
-        +String passwordHash
-        +UserRole role
-        +Boolean active
-        +UUID userId
-        +Date createdAt
+    namespace auth-service {
+        class Credential {
+            +UUID id
+            +String email
+            +String passwordHash
+            +UserRole role
+            +Boolean active
+            +UUID userId
+            +Date createdAt
+        }
+        class UserRole {
+            <<enumeration>>
+            CLIENTE
+            ADMIN
+            CAJERO
+            DESPACHADOR
+            DUENO
+        }
     }
 
-    class UserProfile {
-        +UUID id
-        +String run
-        +String fullName
-        +String phone
-        +String address
-        +String commune
-        +String province
-        +String region
-        +String birthDate
-        +UserGender gender
-        +Date createdAt
+    namespace user-service {
+        class UserProfile {
+            +UUID id
+            +String run
+            +String fullName
+            +String phone
+            +String address
+            +String commune
+            +String province
+            +String region
+            +String birthDate
+            +UserGender gender
+            +Date createdAt
+        }
+        class UserGender {
+            <<enumeration>>
+            M
+            F
+            OTRO
+        }
+        class SavedAddress {
+            +UUID id
+            +UUID userId
+            +String label
+            +String address
+            +String commune
+            +Date createdAt
+        }
     }
 
-    class UserRole {
-        <<enumeration>>
-        CLIENTE
-        ADMIN
-        CAJERO
-        DESPACHADOR
-        DUENO
+    namespace product-service {
+        class Product {
+            +UUID id
+            +String name
+            +String description
+            +Number price
+            +Boolean available
+            +Boolean featured
+            +String imageUrl
+            +Date createdAt
+        }
+        class Category {
+            +UUID id
+            +String name
+            +String slug
+        }
     }
 
-    class UserGender {
-        <<enumeration>>
-        M
-        F
-        OTRO
+    namespace cart-service {
+        class Cart {
+            +UUID id
+            +UUID userId
+            +Date updatedAt
+        }
+        class CartItem {
+            +UUID id
+            +UUID productId
+            +String productName
+            +Number quantity
+            +Number unitPrice
+            +getSubtotal() Number
+        }
     }
 
-    class SavedAddress {
-        +UUID id
-        +UUID userId
-        +String label
-        +String address
-        +String commune
-        +Date createdAt
+    namespace order-service {
+        class Order {
+            +UUID id
+            +UUID userId
+            +OrderStatus status
+            +Number total
+            +String deliveryAddress
+            +String paymentMethod
+            +String cancelReason
+            +Date createdAt
+        }
+        class OrderStatus {
+            <<enumeration>>
+            PENDIENTE
+            PAGADO
+            PREPARANDO
+            EN_CAMINO
+            ENTREGADO
+            ANULADO
+        }
+        class OrderItem {
+            +UUID id
+            +UUID productId
+            +String productName
+            +Number quantity
+            +Number unitPrice
+            +getSubtotal() Number
+        }
     }
 
-    class Product {
-        +UUID id
-        +String name
-        +String description
-        +Number price
-        +Boolean available
-        +Boolean featured
-        +String imageUrl
-        +Date createdAt
+    namespace payment-service {
+        class PaymentMethod {
+            <<abstract>>
+            +String type
+            +process(amount) PaymentResult
+            +validate() Boolean
+        }
+        class CreditCardPayment {
+            +String maskedCardNumber
+            +String expiryDate
+            +process(amount) PaymentResult
+            +validate() Boolean
+        }
+        class ServipagPayment {
+            +String transactionCode
+            +process(amount) PaymentResult
+            +validate() Boolean
+        }
+        class BankTransferPayment {
+            +String bankName
+            +String accountNumber
+            +process(amount) PaymentResult
+            +validate() Boolean
+        }
+        class Payment {
+            +UUID id
+            +UUID orderId
+            +Number amount
+            +PaymentStatus status
+            +String methodType
+            +String transactionId
+            +Date processedAt
+        }
     }
 
-    class Category {
-        +UUID id
-        +String name
-        +String slug
+    namespace notification-service {
+        class Notification {
+            +UUID id
+            +UUID userId
+            +NotificationType type
+            +String message
+            +Boolean read
+            +Date createdAt
+        }
     }
 
-    class Cart {
-        +UUID id
-        +UUID userId
-        +Date updatedAt
-    }
-
-    class CartItem {
-        +UUID id
-        +UUID productId
-        +String productName
-        +Number quantity
-        +Number unitPrice
-        +getSubtotal() Number
-    }
-
-    class Order {
-        +UUID id
-        +UUID userId
-        +OrderStatus status
-        +Number total
-        +String deliveryAddress
-        +String paymentMethod
-        +String cancelReason
-        +Date createdAt
-    }
-
-    class OrderStatus {
-        <<enumeration>>
-        PENDIENTE
-        PAGADO
-        PREPARANDO
-        EN_CAMINO
-        ENTREGADO
-        ANULADO
-    }
-
-    class OrderItem {
-        +UUID id
-        +UUID productId
-        +String productName
-        +Number quantity
-        +Number unitPrice
-        +getSubtotal() Number
-    }
-
-    class PaymentMethod {
-        <<abstract>>
-        +String type
-        +process(amount) PaymentResult
-        +validate() Boolean
-    }
-
-    class CreditCardPayment {
-        +String maskedCardNumber
-        +String expiryDate
-        +process(amount) PaymentResult
-        +validate() Boolean
-    }
-
-    class ServipagPayment {
-        +String transactionCode
-        +process(amount) PaymentResult
-        +validate() Boolean
-    }
-
-    class BankTransferPayment {
-        +String bankName
-        +String accountNumber
-        +process(amount) PaymentResult
-        +validate() Boolean
-    }
-
-    class Payment {
-        +UUID id
-        +UUID orderId
-        +Number amount
-        +PaymentStatus status
-        +String methodType
-        +String transactionId
-        +Date processedAt
-    }
-
-    class Notification {
-        +UUID id
-        +UUID userId
-        +NotificationType type
-        +String message
-        +Boolean read
-        +Date createdAt
-    }
-
-    class WeeklyReport {
-        +UUID id
-        +String weekId
-        +Number totalRevenue
-        +Number totalOrders
-        +Date updatedAt
-    }
-
-    class DailySales {
-        +UUID id
-        +String date
-        +Number revenue
-        +Number orderCount
-        +Number avgOrderValue
+    namespace report-service {
+        class WeeklyReport {
+            +UUID id
+            +String weekId
+            +Number totalRevenue
+            +Number totalOrders
+            +Date updatedAt
+        }
+        class DailySales {
+            +UUID id
+            +String date
+            +Number revenue
+            +Number orderCount
+            +Number avgOrderValue
+        }
     }
 
     Credential "1" --> "1" UserRole : tiene rol
@@ -803,18 +800,11 @@ classDiagram
         +Date createdAt
     }
 
-    class UserProfile {
-        +UUID id
-        +String run
-        +String fullName
-        +String phone
-        +String address
-        +String commune
-        +String province
-        +String region
-        +String birthDate
-        +UserGender gender
-        +Date createdAt
+    class UserService {
+        <<user-service>>
+        +createProfile(data) UserProfile
+        +findByRun(run) UserProfile
+        +findById(id) UserProfile
     }
 
     class LoginDTO {
@@ -840,7 +830,7 @@ classDiagram
 
     AuthController --> AuthService : usa
     AuthService --> Credential : persiste credenciales
-    AuthService --> UserProfile : persiste perfil en registro
+    AuthService ..> UserService : delega perfil (forwardRef)
     AuthService ..> JwtToken : genera
     AuthController ..> LoginDTO : recibe
     AuthController ..> RegisterDTO : recibe
@@ -862,6 +852,9 @@ classDiagram
 
     class UserService {
         +getUserById(id) UserProfile
+        +findById(id) UserProfile
+        +findByRun(run) UserProfile
+        +createProfile(data) UserProfile
         +updateProfile(id, dto) UserProfile
         +getAddresses(userId) SavedAddress[]
         +addAddress(userId, dto) SavedAddress
@@ -1439,14 +1432,14 @@ Todos los microservicios implementados siguen la misma estructura interna. Se el
 
 ```mermaid
 flowchart LR
-    AG[API Gateway]
+    Client([Cliente])
     ORDER[order-service]
     PAY[payment-service]
     MB[[Bus de Eventos]]
     NOTIF[notification-service]
     REPORT[report-service]
 
-    AG -->|JWT + REST| ORDER
+    Client -->|REST /api + JWT por controlador| ORDER
     ORDER -->|sync REST: procesar pago| PAY
     ORDER -->|async: order.created| MB
     ORDER -->|async: order.status_changed| MB
@@ -1506,7 +1499,9 @@ flowchart LR
 
 **Selección:** Se selecciona la Alternativa B.
 
-**Justificación:** Cada servicio tiene mayor cohesión porque solo contiene lo que le corresponde. En la implementación concreta, `auth-service` gestiona la entidad `Credential` (tabla `credentials`: `email`, `passwordHash`, `role`, `active`, `userId`) y `user-service` gestiona la entidad `UserProfile` (tabla `user_profiles`: `run`, `fullName`, `phone`, `address`, `commune`, `province`, `region`, `birthDate`, `gender`). Ningún módulo importa entidades del otro. La vinculación entre perfil y credencial se realiza mediante el campo `userId` (UUID). Esto reduce el acoplamiento: un cambio en los campos del perfil no afecta la lógica de autenticación y vice versa. A futuro, si se quiere integrar otra aplicación con el sistema de autenticación de Fukusuke, se puede reutilizar `auth-service` de forma aislada.
+**Justificación:** Cada servicio tiene mayor cohesión porque solo contiene lo que le corresponde. En la implementación concreta, `auth-service` gestiona la entidad `Credential` (tabla `credentials`: `email`, `passwordHash`, `role`, `active`, `userId`) y `user-service` gestiona la entidad `UserProfile` (tabla `user_profiles`: `run`, `fullName`, `phone`, `address`, `commune`, `province`, `region`, `birthDate`, `gender`). **Ningún módulo importa entidades del otro:** durante el registro, `auth-service` no manipula la entidad `UserProfile` directamente sino que **delega en `UsersService`** (`createProfile`, `findByRun`, `findById`), que es el único dueño de la tabla `user_profiles`. Para inyectar `UsersService` en `AuthService` —y a la vez exponer los guards de `auth` hacia `users`— ambos módulos se referencian con `forwardRef`. La vinculación entre perfil y credencial se realiza mediante el campo `userId` (UUID). Esto reduce el acoplamiento: un cambio en los campos del perfil no afecta la lógica de autenticación y vice versa. A futuro, si se quiere integrar otra aplicación con el sistema de autenticación de Fukusuke, se puede reutilizar `auth-service` de forma aislada.
+
+**Tensión: atomicidad del registro.** El registro crea dos filas (un `UserProfile` y una `Credential`) en operaciones separadas. Conviene ser explícitos: **nunca existió una transacción de base de datos real** envolviendo ambas escrituras —no había `QueryRunner` ni `@Transaction` que las uniera—, ni siquiera cuando `auth-service` accedía a `UserProfile` directamente. Ese acceso directo daba una *ilusión* de atomicidad, pero si la segunda escritura fallaba quedaba igualmente un perfil huérfano. Por lo tanto, delegar la creación del perfil en `UsersService` **no introduce** ninguna pérdida de atomicidad: solo hace explícito un riesgo preexistente. Cerrar esa brecha queda como evolución futura, con dos caminos según cómo evolucione el despliegue: (a) mientras ambos servicios compartan la conexión PostgreSQL, envolver ambas operaciones en una transacción TypeORM (`dataSource.transaction(...)`); o (b) si los servicios se separan físicamente, aceptar consistencia eventual con un patrón de compensación (saga) en lugar de una transacción distribuida.
 
 ---
 
@@ -1584,6 +1579,10 @@ flowchart LR
 
 **Alternativa B:** Bus de eventos asíncrono: `order-service` emite eventos y los servicios interesados reaccionan de forma independiente mediante decoradores `@OnEvent`.
 
+**Alternativa C:** Bus de eventos asíncrono pero sobre un **broker externo** (RabbitMQ, Kafka o AWS SQS) en lugar de `@nestjs/event-emitter` in-process.
+
+**Descarte:** Se descarta para el alcance actual porque introduce complejidad de infraestructura y despliegue (un broker que provisionar, configurar, monitorear y mantener) que no se justifica mientras todos los microservicios corren como módulos dentro de un único proceso NestJS: en ese escenario el bus in-process entrega exactamente la misma semántica de desacople (el emisor no conoce a los consumidores) sin operar infraestructura adicional. Un broker externo solo se vuelve necesario cuando los servicios se **despliegan como procesos separados** y los eventos deben cruzar la frontera del proceso (entrega garantizada, reintentos, persistencia de mensajes), lo cual es evolución futura. Migrar de `@nestjs/event-emitter` a un broker no afecta a los servicios productores ni consumidores: solo cambia el transporte detrás de `emit()` y `@OnEvent`.
+
 **Selección:** Se selecciona la Alternativa B.
 
 **Justificación:** El pedido se crea correctamente sin importar el estado de `notification-service`. `order-service` no necesita saber que `notification-service` o `report-service` existen: solo emite el evento. En la implementación se utilizan cuatro eventos distintos: `order.created` (al persistir el pedido), `order.paid` (al transicionar a estado pagado), `order.status_changed` (en cualquier otra transición) y `order.cancelled` (al anular). `notification-service` reacciona a los tres primeros para registrar notificaciones al usuario, y `report-service` reacciona a `order.paid` para acumular las ventas en el reporte semanal. Si se agrega un nuevo servicio que reaccione a pedidos en el futuro, no hay que modificar `order-service`. Esto mejora la mantenibilidad y reduce significativamente el acoplamiento entre módulos.
@@ -1600,7 +1599,7 @@ flowchart LR
 
 **Alternativa B:** Cada microservicio es responsable de sus propias entidades y no accede a las tablas de otro servicio (patrón Database per Service).
 
-**Selección:** Se selecciona la Alternativa B.
+**Selección:** Se selecciona la Alternativa B, en su variante de **database-per-service _lógico_: tablas separadas por servicio sobre una misma conexión PostgreSQL** (`DATABASE_URL` única). Cada módulo registra exclusivamente sus propias entidades vía `TypeOrmModule.forFeature([...])` y ningún servicio consulta las tablas de otro. La separación **física** en bases de datos/conexiones distintas por servicio **no** forma parte de la selección actual: es una evolución futura (ver "Implementación actual" más abajo).
 
 **Justificación:** Cada módulo puede evolucionar su esquema de forma independiente sin coordinación con otros equipos. Es posible usar Redis para el carrito (alta velocidad de lectura/escritura), PostgreSQL para pedidos (consistencia transaccional) y almacenamiento distinto para reportes, sin que un servicio afecte al otro. Esto mejora la escalabilidad y reduce el acoplamiento estructural entre módulos.
 
