@@ -27,16 +27,15 @@ export default function Orders() {
   const { user }      = useAuth();
   const { orders, cancelOrder } = useOrders();
   const { showToast } = useToast();
-  const [cancelId, setCancelId] = useState<number | null>(null);
+  const [cancelId, setCancelId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState('');
-  const visibleOrders = orders.filter((order) => String(order.userId) === user?.id);
 
   const canCancel = (s: OrderStatus) =>
     s === 'pendiente' || s === 'pagado' || s === 'preparando' || s === 'entregado';
 
-  const handleCancel = (orderId: number) => {
+  const handleCancel = async (orderId: string) => {
     if (!cancelReason.trim()) return;
-    cancelOrder(orderId, cancelReason.trim());
+    await cancelOrder(orderId, cancelReason.trim());
     setCancelId(null);
     setCancelReason('');
     showToast('Pedido anulado correctamente.', 'success');
@@ -47,18 +46,18 @@ export default function Orders() {
       <h1 className="page-title">Mis pedidos</h1>
       <p className="page-subtitle">Hola, {user?.fullName}. Aquí están tus órdenes.</p>
 
-      {visibleOrders.length === 0 ? (
+      {orders.length === 0 ? (
         <div className="orders-empty card border-0 shadow-sm">
           <span>📋</span>
           <p>Aún no tienes pedidos.</p>
         </div>
       ) : (
         <div className="orders-list">
-          {visibleOrders.map((order) => (
+          {orders.map((order) => (
             <div key={order.id} className="order-card card border-0 shadow-sm">
               <div className="order-card__header">
                 <div>
-                  <h3>Pedido #FKS-{String(order.id).padStart(5, '0')}</h3>
+                  <h3>Pedido #FKS-{order.id.slice(-6).toUpperCase()}</h3>
                   <p className="order-card__date">
                     {new Date(order.createdAt).toLocaleDateString('es-CL', {
                       day: '2-digit', month: 'long', year: 'numeric',
@@ -77,7 +76,7 @@ export default function Orders() {
                 <p>📍 {order.address}</p>
                 {order.items.length > 0 && (
                   <p>
-                    🍱 {order.items.map((item) => `${item.product.name} × ${item.quantity}`).join(', ')}
+                    🍱 {order.items.map((item) => `${item.productName} × ${item.quantity}`).join(', ')}
                   </p>
                 )}
                 <p className="order-card__total">

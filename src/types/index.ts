@@ -1,20 +1,25 @@
 // ── Producto del menú ──────────────────────────────────────
 export interface Product {
-  id: number;
+  id: string;
   name: string;
   description: string;
   price: number;
-  category: 'rolls' | 'nigiris' | 'temakis' | 'combos' | 'bebidas';
+  category: string; // slug de categoría
+  categoryName: string;
   image: string;
   available: boolean;
   featured?: boolean;
 }
 
-// ── Ítem dentro del carrito ────────────────────────────────
+// ── Ítem dentro del carrito o de un pedido ─────────────────
 export interface CartItem {
-  product: Product;
+  productId: string;
+  productName: string;
+  unitPrice: number;
   quantity: number;
 }
+
+export type OrderItem = CartItem;
 
 // ── Dirección guardada ─────────────────────────────────────
 export interface SavedAddress {
@@ -51,8 +56,10 @@ export type OrderStatus =
   | 'anulado';
 
 export interface Order {
-  id: number;
-  userId: number;
+  id: string;
+  userId: string;
+  customerName: string;
+  customerEmail: string;
   items: CartItem[];
   total: number;
   status: OrderStatus;

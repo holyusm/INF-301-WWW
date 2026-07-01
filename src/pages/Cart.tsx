@@ -1,11 +1,14 @@
 import { Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
+import { useProducts } from '../hooks/useProducts';
 import './Cart.css';
 
 export default function Cart() {
   const { items, totalItems, totalPrice, removeItem, updateQuantity, clearCart } = useCart();
   const { isAuthenticated } = useAuth();
+  const { products } = useProducts();
+  const imageFor = (productId: string) => products.find((p) => p.id === productId)?.image ?? '';
 
   if (totalItems === 0) {
     return (
@@ -26,30 +29,30 @@ export default function Cart() {
 
       <div className="cart-layout">
         <section className="cart-items">
-          {items.map(({ product, quantity }) => (
-            <div key={product.id} className="cart-item card border-0 shadow-sm">
-              <img src={product.image} alt={product.name} />
+          {items.map(({ productId, productName, unitPrice, quantity }) => (
+            <div key={productId} className="cart-item card border-0 shadow-sm">
+              <img src={imageFor(productId)} alt={productName} />
               <div className="cart-item__info">
-                <h3>{product.name}</h3>
+                <h3>{productName}</h3>
                 <p className="cart-item__price">
-                  ${product.price.toLocaleString('es-CL')} c/u
+                  ${unitPrice.toLocaleString('es-CL')} c/u
                 </p>
               </div>
               <div className="cart-item__qty">
                 <button
                   className="btn btn-outline-secondary btn-sm rounded-circle"
-                  onClick={() => updateQuantity(product.id, quantity - 1)}
+                  onClick={() => updateQuantity(productId, quantity - 1)}
                   disabled={quantity <= 1}
                 >−</button>
                 <span>{quantity}</span>
-                <button className="btn btn-outline-secondary btn-sm rounded-circle" onClick={() => updateQuantity(product.id, quantity + 1)}>+</button>
+                <button className="btn btn-outline-secondary btn-sm rounded-circle" onClick={() => updateQuantity(productId, quantity + 1)}>+</button>
               </div>
               <p className="cart-item__subtotal">
-                ${(product.price * quantity).toLocaleString('es-CL')}
+                ${(unitPrice * quantity).toLocaleString('es-CL')}
               </p>
               <button
                 className="cart-item__remove btn btn-link text-danger text-decoration-none"
-                onClick={() => removeItem(product.id)}
+                onClick={() => removeItem(productId)}
                 aria-label="Eliminar"
               >
                 ✕
@@ -66,10 +69,10 @@ export default function Cart() {
           <h2>Resumen del pedido</h2>
           <hr className="divider" />
 
-          {items.map(({ product, quantity }) => (
-            <div key={product.id} className="cart-summary__line">
-              <span>{product.name} × {quantity}</span>
-              <span>${(product.price * quantity).toLocaleString('es-CL')}</span>
+          {items.map(({ productId, productName, unitPrice, quantity }) => (
+            <div key={productId} className="cart-summary__line">
+              <span>{productName} × {quantity}</span>
+              <span>${(unitPrice * quantity).toLocaleString('es-CL')}</span>
             </div>
           ))}
 

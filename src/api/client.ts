@@ -107,6 +107,16 @@ export interface ApiProduct {
   updatedAt: string;
 }
 
+export interface CreateProductPayload {
+  name: string;
+  description: string;
+  price: number;
+  available?: boolean;
+  featured?: boolean;
+  imageUrl?: string;
+  categoryId: string;
+}
+
 export interface ApiUser {
   id: string;
   email: string;
@@ -196,6 +206,8 @@ export interface ApiOrderItem {
 export interface ApiOrder {
   id: string;
   userId: string;
+  customerName: string;
+  customerEmail: string;
   status: ApiOrderStatus;
   total: number;
   deliveryAddress: string;
@@ -268,17 +280,25 @@ export const api = {
         categorySlug ? `/products?category=${encodeURIComponent(categorySlug)}` : '/products',
       ),
     getById: (id: string) => request<ApiProduct>(`/products/${id}`),
+    create: (payload: CreateProductPayload) =>
+      request<ApiProduct>('/products', { method: 'POST', body: payload }),
+    update: (id: string, payload: Partial<CreateProductPayload>) =>
+      request<ApiProduct>(`/products/${id}`, { method: 'PUT', body: payload }),
+    setAvailability: (id: string, available: boolean) =>
+      request<ApiProduct>(`/products/${id}/availability`, { method: 'PATCH', body: { available } }),
   },
 
   cart: {
-    get: () => request<ApiCart>('/cart'),
+    // El backend responde { cart, total } (CartWithTotal) — se desenvuelve
+    // aquí para que el resto de la app trabaje con el ApiCart plano.
+    get: () => request<{ cart: ApiCart; total: number }>('/cart').then((r) => r.cart),
     addItem: (item: AddItemPayload) =>
-      request<ApiCart>('/cart/items', { method: 'POST', body: item }),
+      request<{ cart: ApiCart; total: number }>('/cart/items', { method: 'POST', body: item }).then((r) => r.cart),
     updateItem: (productId: string, quantity: number) =>
-      request<ApiCart>(`/cart/items/${productId}`, { method: 'PUT', body: { quantity } }),
+      request<{ cart: ApiCart; total: number }>(`/cart/items/${productId}`, { method: 'PUT', body: { quantity } }).then((r) => r.cart),
     removeItem: (productId: string) =>
-      request<ApiCart>(`/cart/items/${productId}`, { method: 'DELETE' }),
-    clear: () => request<ApiCart>('/cart', { method: 'DELETE' }),
+      request<{ cart: ApiCart; total: number }>(`/cart/items/${productId}`, { method: 'DELETE' }).then((r) => r.cart),
+    clear: () => request<{ cart: ApiCart; total: number }>('/cart', { method: 'DELETE' }).then((r) => r.cart),
   },
 
   orders: {
@@ -294,5 +314,7 @@ export const api = {
   reports: {
     getCurrent: () => request<ApiWeeklyReport>('/reports/current'),
     getRecent: (n = 4) => request<ApiWeeklyReport[]>(`/reports/recent?n=${n}`),
+    getByWeekId: (weekId: string) =>
+      request<ApiWeeklyReport>(`/reports/${encodeURIComponent(weekId)}`),
   },
 };

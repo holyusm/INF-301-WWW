@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
+import { useProducts } from '../hooks/useProducts';
 import './CartSidebar.css';
 
 export default function CartSidebar() {
@@ -11,6 +12,8 @@ export default function CartSidebar() {
     removeItem, updateQuantity, clearCart,
   } = useCart();
   const { isAuthenticated } = useAuth();
+  const { products } = useProducts();
+  const imageFor = (productId: string) => products.find((p) => p.id === productId)?.image ?? '';
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -78,32 +81,32 @@ export default function CartSidebar() {
           <>
             {/* Lista de productos */}
             <div className="cart-sidebar__items">
-              {items.map(({ product, quantity }) => (
-                <div key={product.id} className="cart-sidebar__item">
+              {items.map(({ productId, productName, unitPrice, quantity }) => (
+                <div key={productId} className="cart-sidebar__item">
                   <img
-                    src={product.image}
-                    alt={product.name}
+                    src={imageFor(productId)}
+                    alt={productName}
                     className="cart-sidebar__item-img"
                   />
 
                   <div className="cart-sidebar__item-info">
-                    <p className="cart-sidebar__item-name">{product.name}</p>
+                    <p className="cart-sidebar__item-name">{productName}</p>
                     <p className="cart-sidebar__item-price">
-                      ${product.price.toLocaleString('es-CL')} c/u
+                      ${unitPrice.toLocaleString('es-CL')} c/u
                     </p>
 
                     {/* Controles de cantidad */}
                     <div className="cart-sidebar__qty">
                       <button
                         className="cart-sidebar__qty-btn"
-                        onClick={() => updateQuantity(product.id, quantity - 1)}
+                        onClick={() => updateQuantity(productId, quantity - 1)}
                         disabled={quantity <= 1}
                         aria-label="Disminuir cantidad"
                       >−</button>
                       <span className="cart-sidebar__qty-num">{quantity}</span>
                       <button
                         className="cart-sidebar__qty-btn"
-                        onClick={() => updateQuantity(product.id, quantity + 1)}
+                        onClick={() => updateQuantity(productId, quantity + 1)}
                         aria-label="Aumentar cantidad"
                       >+</button>
                     </div>
@@ -111,12 +114,12 @@ export default function CartSidebar() {
 
                   <div className="cart-sidebar__item-right">
                     <p className="cart-sidebar__item-subtotal">
-                      ${(product.price * quantity).toLocaleString('es-CL')}
+                      ${(unitPrice * quantity).toLocaleString('es-CL')}
                     </p>
                     <button
                       className="cart-sidebar__remove"
-                      onClick={() => removeItem(product.id)}
-                      aria-label={`Eliminar ${product.name}`}
+                      onClick={() => removeItem(productId)}
+                      aria-label={`Eliminar ${productName}`}
                     >✕</button>
                   </div>
                 </div>

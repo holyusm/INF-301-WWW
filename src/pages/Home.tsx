@@ -1,11 +1,8 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { PRODUCTS } from '../data/products';
+import { useProducts } from '../hooks/useProducts';
 import ProductCard from '../components/ProductCard';
 import './Home.css';
-
-const featured = PRODUCTS.filter((p) => p.featured && p.available).slice(0, 3);
-
 
 const BENEFITS = [
   { icon: 'bi-truck',          title: 'Despacho gratuito',  desc: 'Dentro de un radio de 3 km de nuestro local en Maipú.' },
@@ -16,6 +13,8 @@ const BENEFITS = [
 
 export default function Home() {
   const { isAuthenticated } = useAuth();
+  const { products } = useProducts();
+  const featured = products.filter((p) => p.featured && p.available).slice(0, 3);
 
   return (
     <main className="home">

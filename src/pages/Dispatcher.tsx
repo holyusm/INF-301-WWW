@@ -1,5 +1,4 @@
 import { useOrders } from '../context/OrderContext';
-import { useAuth } from '../context/AuthContext';
 import type { Order, OrderStatus } from '../types';
 import './Dispatcher.css';
 
@@ -29,17 +28,11 @@ function activeOrders(orders: Order[]): Order[] {
 
 export default function Dispatcher() {
   const { orders, updateOrderStatus } = useOrders();
-  const { users } = useAuth();
 
   const pendingDispatch = activeOrders(orders);
   const history = orders.filter(
     (o) => o.status === 'entregado' || o.status === 'anulado'
   );
-
-  const getUserName = (userId: number) => {
-    const u = users.find((u) => u.id === String(userId));
-    return u ? u.fullName : `Usuario #${userId}`;
-  };
 
   return (
     <main className="dispatcher-page container">
@@ -68,7 +61,7 @@ export default function Dispatcher() {
               <div key={order.id} className={`dispatch-card card border-0 shadow-sm dispatch-card--${order.status}`}>
                 <div className="dispatch-card__header">
                   <div>
-                    <h3>Pedido #{String(order.id).slice(-6)}</h3>
+                    <h3>Pedido #{order.id.slice(-6).toUpperCase()}</h3>
                     <p className="dispatch-card__date">
                       {new Date(order.createdAt).toLocaleString('es-CL', {
                         day: '2-digit', month: '2-digit', year: 'numeric',
@@ -82,16 +75,16 @@ export default function Dispatcher() {
                 </div>
 
                 <div className="dispatch-card__body">
-                  <p><strong>Cliente:</strong> {getUserName(order.userId)}</p>
+                  <p><strong>Cliente:</strong> {order.customerName}</p>
                   <p><strong>📍 Dirección:</strong> {order.address}</p>
                   <p><strong>Total:</strong> ${order.total.toLocaleString('es-CL')}</p>
                   {order.items.length > 0 && (
                     <div className="dispatch-card__items">
                       <strong>Productos:</strong>
                       <ul>
-                        {order.items.map(({ product, quantity }) => (
-                          <li key={product.id}>
-                            {product.name} × {quantity}
+                        {order.items.map(({ productId, productName, quantity }) => (
+                          <li key={productId}>
+                            {productName} × {quantity}
                           </li>
                         ))}
                       </ul>
@@ -138,8 +131,8 @@ export default function Dispatcher() {
               <tbody>
                 {history.slice(0, 20).map((o) => (
                   <tr key={o.id}>
-                    <td>#{String(o.id).slice(-6)}</td>
-                    <td>{getUserName(o.userId)}</td>
+                    <td>#{o.id.slice(-6).toUpperCase()}</td>
+                    <td>{o.customerName}</td>
                     <td>{o.address}</td>
                     <td>${o.total.toLocaleString('es-CL')}</td>
                     <td>

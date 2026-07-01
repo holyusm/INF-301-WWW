@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { useOrders } from '../context/OrderContext';
+import { ApiError } from '../api/client';
+import type { InlinePayment } from '../api/client';
 import Boleta from '../components/Boleta';
 import type { Order } from '../types';
 import './Checkout.css';
@@ -94,28 +96,40 @@ export default function Checkout() {
 
     setCardError('');
     setPaymentResult('loading');
-    await new Promise((r) => setTimeout(r, 2200));
 
-    if (willFail) {
-      setPaymentResult('error');
-      return;
+    // Servipag/transferencia son simulados en esta unidad (no se envían datos
+    // de pago reales); tarjeta sí se procesa contra el Strategy real del backend.
+    // El "perfil de fracaso" envía datos de tarjeta incompletos a propósito para
+    // que PaymentMethod.validate() los rechace en el servidor.
+    const paymentData: InlinePayment | undefined =
+      payment === 'tarjeta'
+        ? willFail
+          ? { methodType: 'tarjeta' }
+          : { methodType: 'tarjeta', cardNumber: card.number, expiryDate: card.expiry }
+        : undefined;
+
+    try {
+      const order = await createOrder({
+        items,
+        total: totalPrice,
+        address: `${address}, ${commune}`,
+        paymentMethod: payment,
+        paymentData,
+      });
+
+      setCreatedOrder(order);
+      setPaymentResult('success');
+      await clearCart();
+
+      // Enviar el correo de forma asíncrona sin bloquear la UI
+      sendOrderReceipt(order, { fullName: user.fullName || 'Cliente', email: user.email });
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setPaymentResult('error');
+        return;
+      }
+      throw err;
     }
-
-    const order = createOrder({
-      // El OrderContext local aún usa userId numérico; se migra en el paso 5.
-      userId: user.id as unknown as number,
-      items,
-      total: totalPrice,
-      address: `${address}, ${commune}`,
-      paymentMethod: payment,
-    });
-
-    setCreatedOrder(order);
-    setPaymentResult('success');
-    clearCart();
-
-    // Enviar el correo de forma asíncrona sin bloquear la UI
-    sendOrderReceipt(order, { fullName: user.fullName || 'Cliente', email: user.email });
   };
 
   if (items.length === 0 && paymentResult === 'idle') {
@@ -172,7 +186,7 @@ export default function Checkout() {
           <span className="checkout-result-icon checkout-result-icon--success">✓</span>
           <h2 className="text-success">¡Pago realizado con éxito!</h2>
           <p>
-            Pedido <strong>#{String(createdOrder.id).slice(-6)}</strong> confirmado.
+            Pedido <strong>#{createdOrder.id.slice(-6).toUpperCase()}</strong> confirmado.
             Nuestro cajero virtual procesará tu orden y te enviará la boleta a{' '}
             <strong>{user?.email}</strong>.
           </p>
@@ -189,7 +203,7 @@ export default function Checkout() {
         {showBoleta && user && (
           <Boleta
             order={createdOrder}
-            user={user}
+            run={user.run}
             onClose={() => setShowBoleta(false)}
           />
         )}
@@ -463,10 +477,10 @@ export default function Checkout() {
         <aside className="checkout-summary card border-0 shadow-sm">
           <h2>Resumen</h2>
           <hr className="divider" />
-          {items.map(({ product, quantity }) => (
-            <div key={product.id} className="checkout-summary__line">
-              <span>{product.name} × {quantity}</span>
-              <span>${(product.price * quantity).toLocaleString('es-CL')}</span>
+          {items.map(({ productId, productName, unitPrice, quantity }) => (
+            <div key={productId} className="checkout-summary__line">
+              <span>{productName} × {quantity}</span>
+              <span>${(unitPrice * quantity).toLocaleString('es-CL')}</span>
             </div>
           ))}
           <hr className="divider" />

@@ -1,8 +1,8 @@
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { useNavigate } from 'react-router-dom';
 import type { Product } from '../types';
-import { CATEGORY_LABELS } from '../data/products';
 import './ProductCard.css';
 
 interface Props {
@@ -12,6 +12,7 @@ interface Props {
 export default function ProductCard({ product }: Props) {
   const { addItem } = useCart();
   const { isAuthenticated } = useAuth();
+  const { showToast } = useToast();
   const navigate = useNavigate();
 
   const handleAdd = () => {
@@ -19,14 +20,14 @@ export default function ProductCard({ product }: Props) {
       navigate('/login');
       return;
     }
-    addItem(product);
+    addItem(product).catch(() => showToast('No se pudo agregar el producto al carrito.', 'danger'));
   };
 
   return (
     <article className={`card border-0 shadow-sm product-card ${!product.available ? 'product-card--unavailable' : ''}`}>
       <div className="product-card__img-wrap">
         <img src={product.image} alt={product.name} loading="lazy" />
-        <span className="tag badge rounded-pill text-bg-light">{CATEGORY_LABELS[product.category]}</span>
+        <span className="tag badge rounded-pill text-bg-light">{product.categoryName}</span>
         {!product.available && (
           <div className="product-card__overlay">No disponible</div>
         )}

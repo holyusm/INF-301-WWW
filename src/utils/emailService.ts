@@ -18,7 +18,7 @@ export async function sendOrderReceipt(order: Order, user: UserData): Promise<bo
 
   try {
     const itemsHtml = order.items
-      .map((item) => `${item.product.name} (x${item.quantity}) - $${(item.product.price * item.quantity).toLocaleString('es-CL')}`)
+      .map((item) => `${item.productName} (x${item.quantity}) - $${(item.unitPrice * item.quantity).toLocaleString('es-CL')}`)
       .join('\n');
 
     // Mapear HTML para la tabla de la boleta de correo
@@ -26,9 +26,9 @@ export async function sendOrderReceipt(order: Order, user: UserData): Promise<bo
       .map((item) => `
         <table width="100%" style="font-size: 13px; font-family: 'Courier New', Courier, monospace; margin-bottom: 5px;">
           <tr>
-            <td width="50%">${item.product.name}</td>
+            <td width="50%">${item.productName}</td>
             <td width="20%">${item.quantity}</td>
-            <td width="30%" style="text-align: right;">$${(item.product.price * item.quantity).toLocaleString('es-CL')}</td>
+            <td width="30%" style="text-align: right;">$${(item.unitPrice * item.quantity).toLocaleString('es-CL')}</td>
           </tr>
         </table>
       `)

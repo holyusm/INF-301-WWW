@@ -1,55 +1,15 @@
 import {
   createContext,
   useContext,
-  useReducer,
+  useCallback,
+  useEffect,
   useState,
   type ReactNode,
 } from 'react';
 import type { CartItem, Product } from '../types';
-
-// ── Estado ──────────────────────────────────────────────────
-interface CartState {
-  items: CartItem[];
-}
-
-// ── Acciones ────────────────────────────────────────────────
-type CartAction =
-  | { type: 'ADD';    product: Product }
-  | { type: 'REMOVE'; productId: number }
-  | { type: 'UPDATE'; productId: number; quantity: number }
-  | { type: 'CLEAR' };
-
-function cartReducer(state: CartState, action: CartAction): CartState {
-  switch (action.type) {
-    case 'ADD': {
-      const existing = state.items.find((i) => i.product.id === action.product.id);
-      if (existing) {
-        return {
-          items: state.items.map((i) =>
-            i.product.id === action.product.id
-              ? { ...i, quantity: i.quantity + 1 }
-              : i
-          ),
-        };
-      }
-      return { items: [...state.items, { product: action.product, quantity: 1 }] };
-    }
-    case 'REMOVE':
-      return { items: state.items.filter((i) => i.product.id !== action.productId) };
-    case 'UPDATE':
-      return {
-        items: state.items.map((i) =>
-          i.product.id === action.productId
-            ? { ...i, quantity: Math.max(1, action.quantity) }
-            : i
-        ),
-      };
-    case 'CLEAR':
-      return { items: [] };
-    default:
-      return state;
-  }
-}
+import { api } from '../api/client';
+import { mapLineItem } from '../api/mappers';
+import { useAuth } from './AuthContext';
 
 // ── Context ─────────────────────────────────────────────────
 interface CartContextValue {
@@ -60,42 +20,66 @@ interface CartContextValue {
   isCartOpen: boolean;
   openCart:   () => void;
   closeCart:  () => void;
-  addItem:          (product: Product) => void;
-  removeItem:       (productId: number) => void;
-  updateQuantity:   (productId: number, quantity: number) => void;
-  clearCart:        () => void;
+  addItem:          (product: Product) => Promise<void>;
+  removeItem:       (productId: string) => Promise<void>;
+  updateQuantity:   (productId: string, quantity: number) => Promise<void>;
+  clearCart:        () => Promise<void>;
 }
 
 const CartContext = createContext<CartContextValue | null>(null);
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  const [state,      dispatch]     = useReducer(cartReducer, { items: [] });
-  const [isCartOpen, setCartOpen]  = useState(false);
+  const { isAuthenticated } = useAuth();
+  const [items, setItems]         = useState<CartItem[]>([]);
+  const [isCartOpen, setCartOpen] = useState(false);
 
-  const totalItems = state.items.reduce((s, i) => s + i.quantity, 0);
-  const totalPrice = state.items.reduce(
-    (s, i) => s + i.product.price * i.quantity,
-    0
-  );
+  const refreshCart = useCallback(async () => {
+    if (!isAuthenticated) {
+      setItems([]);
+      return;
+    }
+    const cart = await api.cart.get();
+    setItems(cart.items.map(mapLineItem));
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    void refreshCart();
+  }, [refreshCart]);
+
+  const totalItems = items.reduce((s, i) => s + i.quantity, 0);
+  const totalPrice = items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
 
   return (
     <CartContext.Provider
       value={{
-        items: state.items,
+        items,
         totalItems,
         totalPrice,
         isCartOpen,
-        openCart:  ()  => setCartOpen(true),
-        closeCart: ()  => setCartOpen(false),
-        // Al agregar un producto se abre automáticamente el drawer
-        addItem: (p) => {
-          dispatch({ type: 'ADD', product: p });
+        openCart:  () => setCartOpen(true),
+        closeCart: () => setCartOpen(false),
+        addItem: async (product) => {
+          const cart = await api.cart.addItem({
+            productId: product.id,
+            productName: product.name,
+            unitPrice: product.price,
+            quantity: 1,
+          });
+          setItems(cart.items.map(mapLineItem));
           setCartOpen(true);
         },
-        removeItem: (id)       => dispatch({ type: 'REMOVE', productId: id }),
-        updateQuantity: (id, qty) =>
-          dispatch({ type: 'UPDATE', productId: id, quantity: qty }),
-        clearCart: () => dispatch({ type: 'CLEAR' }),
+        removeItem: async (productId) => {
+          const cart = await api.cart.removeItem(productId);
+          setItems(cart.items.map(mapLineItem));
+        },
+        updateQuantity: async (productId, quantity) => {
+          const cart = await api.cart.updateItem(productId, Math.max(1, quantity));
+          setItems(cart.items.map(mapLineItem));
+        },
+        clearCart: async () => {
+          const cart = await api.cart.clear();
+          setItems(cart.items.map(mapLineItem));
+        },
       }}
     >
       {children}

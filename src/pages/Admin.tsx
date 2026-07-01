@@ -1,4 +1,4 @@
-import { useState, useMemo, type ChangeEvent } from 'react';
+import { useState, useMemo, useEffect, type ChangeEvent } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -11,17 +11,19 @@ import {
 import { Bar } from 'react-chartjs-2';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
-import { PRODUCTS as INITIAL_PRODUCTS, CATEGORY_LABELS } from '../data/products';
 import { useOrders } from '../context/OrderContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useProducts } from '../hooks/useProducts';
+import { api, ApiError } from '../api/client';
+import type { ApiWeeklyReport } from '../api/client';
+import { getWeekId } from '../utils/isoWeek';
 import { validateRun } from '../utils/run';
 import { validateEmailDeliverable } from '../utils/emailValidation';
-import type { OrderStatus, Product, User } from '../types';
+import type { OrderStatus, User } from '../types';
 import './Admin.css';
 
 // ── Constantes ─────────────────────────────────────────────
-const PRODUCTS_KEY = 'fukusuke_products';
 const REGIONS      = ['Región Metropolitana', 'Valparaíso', 'Biobío', 'Araucanía', 'Los Lagos'];
 const STAFF_ROLES  = ['admin', 'cajero', 'despachador', 'dueno'] as const;
 
@@ -45,21 +47,19 @@ const STATUS_BADGES: Record<OrderStatus, string> = {
   anulado:    'text-bg-danger',
 };
 
-// ── Productos: carga/guardado en localStorage ───────────────
-function loadProducts(): Product[] {
-  try {
-    const saved = localStorage.getItem(PRODUCTS_KEY);
-    if (saved) {
-      const parsed = JSON.parse(saved) as Product[];
-      if (parsed.length > 0) return parsed;
-    }
-  } catch { /* fallback */ }
-  localStorage.setItem(PRODUCTS_KEY, JSON.stringify(INITIAL_PRODUCTS));
-  return INITIAL_PRODUCTS;
+// ── Formulario de producto (categoryId, no slug — lo exige el backend) ──
+interface ProductFormState {
+  name: string;
+  description: string;
+  price: number;
+  categoryId: string;
+  image: string;
+  available: boolean;
+  featured: boolean;
 }
 
-const EMPTY_PRODUCT: Omit<Product, 'id'> = {
-  name: '', description: '', price: 0, category: 'rolls',
+const EMPTY_PRODUCT: ProductFormState = {
+  name: '', description: '', price: 0, categoryId: '',
   image: '', available: true, featured: false,
 };
 
@@ -82,16 +82,15 @@ export default function Admin() {
   const [tab, setTab] = useState<Tab>('productos');
 
   // ── Productos ──
-  const [products, setProducts] = useState<Product[]>(loadProducts);
-  const [productForm, setProductForm] = useState<Omit<Product, 'id'>>(EMPTY_PRODUCT);
-  const [editProductId, setEditProductId] = useState<number | null>(null);
+  const { products, categories, refetch: refetchProducts } = useProducts();
+  const [productForm, setProductForm] = useState<ProductFormState>(EMPTY_PRODUCT);
+  const [editProductId, setEditProductId] = useState<string | null>(null);
   const [showProductForm, setShowProductForm] = useState(false);
-  const [deleteProductId, setDeleteProductId] = useState<number | null>(null);
 
   // ── Pedidos ──
   const { orders, cancelOrder } = useOrders();
   const { showToast }           = useToast();
-  const [cancelId, setCancelId] = useState<number | null>(null);
+  const [cancelId, setCancelId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState('');
 
   // ── Usuarios / Clientes ──
@@ -108,50 +107,67 @@ export default function Admin() {
   // ─────────────────────────────────────────────────────────
   //  Helpers PRODUCTOS
   // ─────────────────────────────────────────────────────────
-  const saveProducts = (updated: Product[]) => {
-    setProducts(updated);
-    localStorage.setItem(PRODUCTS_KEY, JSON.stringify(updated));
-  };
-
   const openAddProduct = () => {
-    setProductForm(EMPTY_PRODUCT);
+    setProductForm({ ...EMPTY_PRODUCT, categoryId: categories[0]?.id ?? '' });
     setEditProductId(null);
     setShowProductForm(true);
   };
 
-  const openEditProduct = (p: Product) => {
-    const { id: _id, ...rest } = p;
-    setProductForm(rest);
+  const openEditProduct = (p: (typeof products)[number]) => {
+    const category = categories.find((c) => c.slug === p.category);
+    setProductForm({
+      name: p.name,
+      description: p.description,
+      price: p.price,
+      categoryId: category?.id ?? '',
+      image: p.image,
+      available: p.available,
+      featured: p.featured ?? false,
+    });
     setEditProductId(p.id);
     setShowProductForm(true);
   };
 
-  const handleSaveProduct = () => {
-    if (!productForm.name.trim() || productForm.price <= 0) return;
-    if (editProductId !== null) {
-      saveProducts(
-        products.map((p) => p.id === editProductId ? { ...productForm, id: editProductId } : p)
-      );
-      showToast('Producto actualizado correctamente.', 'success');
-    } else {
-      saveProducts([...products, { ...productForm, id: Date.now() }]);
-      showToast('Producto creado correctamente.', 'success');
+  const handleSaveProduct = async () => {
+    if (!productForm.name.trim() || productForm.price <= 0 || !productForm.categoryId) return;
+    try {
+      if (editProductId !== null) {
+        await api.products.update(editProductId, {
+          name: productForm.name,
+          description: productForm.description,
+          price: productForm.price,
+          categoryId: productForm.categoryId,
+          imageUrl: productForm.image,
+          available: productForm.available,
+          featured: productForm.featured,
+        });
+        showToast('Producto actualizado correctamente.', 'success');
+      } else {
+        await api.products.create({
+          name: productForm.name,
+          description: productForm.description,
+          price: productForm.price,
+          categoryId: productForm.categoryId,
+          imageUrl: productForm.image,
+          available: productForm.available,
+          featured: productForm.featured,
+        });
+        showToast('Producto creado correctamente.', 'success');
+      }
+      await refetchProducts();
+      setShowProductForm(false);
+      setEditProductId(null);
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.message : 'No se pudo guardar el producto.', 'danger');
     }
-    setShowProductForm(false);
-    setEditProductId(null);
   };
 
-  const handleDeleteProduct = (id: number) => {
-    saveProducts(products.filter((p) => p.id !== id));
-    setDeleteProductId(null);
-    showToast('Producto eliminado.', 'info');
+  const toggleAvailability = async (id: string, available: boolean) => {
+    await api.products.setAvailability(id, !available);
+    await refetchProducts();
   };
 
-  const toggleAvailability = (id: number) => {
-    saveProducts(products.map((p) => p.id === id ? { ...p, available: !p.available } : p));
-  };
-
-  const setProductField = (field: keyof Omit<Product, 'id'>) =>
+  const setProductField = (field: keyof ProductFormState) =>
     (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
       const value = e.target.type === 'checkbox'
         ? (e.target as HTMLInputElement).checked
@@ -258,6 +274,33 @@ export default function Admin() {
 
   const DAY_NAMES = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
+  // ── Reporte real del backend (Chart.js consume esto, no localStorage) ──
+  const [report, setReport] = useState<ApiWeeklyReport | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = weekOffset === 0
+          ? await api.reports.getCurrent()
+          : await api.reports.getByWeekId(getWeekId(weekDays[0]));
+        if (!cancelled) setReport(data);
+      } catch (err) {
+        if (cancelled) return;
+        // Semana sin ventas registradas → reporte vacío, no es un error real.
+        if (err instanceof ApiError && err.statusCode === 404) {
+          setReport({
+            id: '', weekId: getWeekId(weekDays[0]), totalRevenue: 0, totalOrders: 0,
+            dailySales: [], generatedAt: '', updatedAt: '',
+          });
+        } else {
+          showToast('No se pudo cargar el reporte de la semana.', 'danger');
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [weekOffset, weekDays, showToast]);
+
   const reportOrders = useMemo(() => orders.filter((o) => {
     if (o.status === 'anulado') return false;
     const d = new Date(o.createdAt);
@@ -266,17 +309,16 @@ export default function Admin() {
     return d >= start && d <= end;
   }), [orders, weekDays]);
 
-  const totalSales = reportOrders.reduce((acc, o) => acc + o.total, 0);
-  const avgTicket  = reportOrders.length ? Math.round(totalSales / reportOrders.length) : 0;
+  const totalSales = Number(report?.totalRevenue ?? 0);
+  const totalOrders = report?.totalOrders ?? 0;
+  const avgTicket  = totalOrders ? Math.round(totalSales / totalOrders) : 0;
 
-  // ── Chart data: siempre 7 barras (Lun–Dom) ──
+  // ── Chart data: siempre 7 barras (Lun–Dom), alimentadas por report.dailySales ──
   const chartData = useMemo(() => {
     const salesByDay = weekDays.map((day) => {
-      const dayStart = new Date(day); dayStart.setHours(0, 0, 0, 0);
-      const dayEnd   = new Date(day); dayEnd.setHours(23, 59, 59, 999);
-      return reportOrders
-        .filter((o) => { const d = new Date(o.createdAt); return d >= dayStart && d <= dayEnd; })
-        .reduce((acc, o) => acc + o.total, 0);
+      const dateStr = day.toISOString().split('T')[0];
+      const daily = report?.dailySales.find((ds) => ds.date === dateStr);
+      return daily ? Number(daily.revenue) : 0;
     });
     return {
       labels: DAY_NAMES,
@@ -291,7 +333,7 @@ export default function Admin() {
         borderRadius: 6,
       }],
     };
-  }, [reportOrders, weekDays]);
+  }, [report, weekDays]);
 
   const chartOptions = {
     responsive: true,
@@ -360,10 +402,10 @@ export default function Admin() {
                 </div>
                 <div className="col-md-3">
                   <label className="form-label">Categoría</label>
-                  <select className="form-select" value={productForm.category}
-                    onChange={setProductField('category')}>
-                    {(Object.keys(CATEGORY_LABELS) as Array<keyof typeof CATEGORY_LABELS>).map((c) => (
-                      <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>
+                  <select className="form-select" value={productForm.categoryId}
+                    onChange={setProductField('categoryId')}>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
                 </div>
@@ -435,33 +477,21 @@ export default function Admin() {
                         </div>
                       </div>
                     </td>
-                    <td><span className="tag">{CATEGORY_LABELS[p.category]}</span></td>
+                    <td><span className="tag">{p.categoryName}</span></td>
                     <td>${p.price.toLocaleString('es-CL')}</td>
                     <td>
                       <button
                         className={`admin-toggle badge border-0 ${p.available ? 'text-bg-success' : 'text-bg-danger'}`}
-                        onClick={() => toggleAvailability(p.id)}
+                        onClick={() => toggleAvailability(p.id, p.available)}
                       >
                         {p.available ? 'Disponible' : 'No disponible'}
                       </button>
                     </td>
                     <td>
-                      {deleteProductId === p.id ? (
-                        <div className="admin-del-confirm">
-                          <span>¿Eliminar?</span>
-                          <button className="btn btn-danger btn-sm"
-                            onClick={() => handleDeleteProduct(p.id)}>Sí</button>
-                          <button className="btn btn-outline-secondary btn-sm"
-                            onClick={() => setDeleteProductId(null)}>No</button>
-                        </div>
-                      ) : (
-                        <div className="admin-actions">
-                          <button className="btn btn-outline-primary btn-sm"
-                            onClick={() => openEditProduct(p)}>Editar</button>
-                          <button className="btn btn-outline-danger btn-sm"
-                            onClick={() => setDeleteProductId(p.id)}>Eliminar</button>
-                        </div>
-                      )}
+                      <div className="admin-actions">
+                        <button className="btn btn-outline-primary btn-sm"
+                          onClick={() => openEditProduct(p)}>Editar</button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -628,8 +658,8 @@ export default function Admin() {
                   <tr><td colSpan={6}><div className="admin-empty-row">No hay pedidos.</div></td></tr>
                 ) : orders.map((order) => (
                   <tr key={order.id}>
-                    <td>#{String(order.id).slice(-6)}</td>
-                    <td>Usuario #{order.userId}</td>
+                    <td>#{order.id.slice(-6).toUpperCase()}</td>
+                    <td>{order.customerName}</td>
                     <td>
                       <span className={`badge ${STATUS_BADGES[order.status]}`}>
                         {STATUS_LABELS[order.status]}
@@ -655,8 +685,8 @@ export default function Admin() {
                           <button
                             className="btn btn-sm btn-danger"
                             disabled={!cancelReason.trim()}
-                            onClick={() => {
-                              cancelOrder(order.id, cancelReason.trim());
+                            onClick={async () => {
+                              await cancelOrder(order.id, cancelReason.trim());
                               setCancelId(null);
                               setCancelReason('');
                               showToast('Pedido anulado correctamente.', 'info');
@@ -742,9 +772,9 @@ export default function Admin() {
                 <tbody>
                   {reportOrders.map((o) => (
                     <tr key={o.id}>
-                      <td>#{String(o.id).slice(-6)}</td>
+                      <td>#{o.id.slice(-6).toUpperCase()}</td>
                       <td>{new Date(o.createdAt).toLocaleDateString('es-CL')}</td>
-                      <td>Usuario #{o.userId}</td>
+                      <td>{o.customerName}</td>
                       <td>{o.paymentMethod ?? '—'}</td>
                       <td>
                         <span className={`badge ${STATUS_BADGES[o.status]}`}>

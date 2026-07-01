@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import type { Order, User } from '../types';
+import type { Order } from '../types';
 import './Boleta.css';
 
 const PAYMENT_LABELS: Record<string, string> = {
@@ -10,18 +10,19 @@ const PAYMENT_LABELS: Record<string, string> = {
 
 interface Props {
   order: Order;
-  user: User;
+  /** RUN del cliente — solo disponible cuando el propio cliente ve su boleta. */
+  run?: string;
   onClose: () => void;
 }
 
-export default function Boleta({ order, user, onClose }: Props) {
+export default function Boleta({ order, run, onClose }: Props) {
   // Agrega clase al body para que @media print oculte el resto de la página
   useEffect(() => {
     document.body.classList.add('boleta-print-active');
     return () => document.body.classList.remove('boleta-print-active');
   }, []);
 
-  const boleataNum = String(order.id).slice(-8).padStart(8, '0');
+  const boleataNum = order.id.slice(-8).toUpperCase().padStart(8, '0');
   const fecha      = new Date(order.createdAt).toLocaleString('es-CL', {
     day: '2-digit', month: '2-digit', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
@@ -48,11 +49,11 @@ export default function Boleta({ order, user, onClose }: Props) {
             </div>
             <div className="boleta-info__row">
               <span>Cliente</span>
-              <span>{user.fullName}</span>
+              <span>{order.customerName}</span>
             </div>
             <div className="boleta-info__row">
               <span>RUN</span>
-              <span>{user.run}</span>
+              <span>{run ?? '—'}</span>
             </div>
             <div className="boleta-info__row">
               <span>Dirección despacho</span>
@@ -81,13 +82,13 @@ export default function Boleta({ order, user, onClose }: Props) {
                   </td>
                 </tr>
               ) : (
-                order.items.map(({ product, quantity }) => (
-                  <tr key={product.id}>
-                    <td>{product.name}</td>
+                order.items.map(({ productId, productName, unitPrice, quantity }) => (
+                  <tr key={productId}>
+                    <td>{productName}</td>
                     <td className="text-center">{quantity}</td>
-                    <td className="text-right">${product.price.toLocaleString('es-CL')}</td>
+                    <td className="text-right">${unitPrice.toLocaleString('es-CL')}</td>
                     <td className="text-right">
-                      ${(product.price * quantity).toLocaleString('es-CL')}
+                      ${(unitPrice * quantity).toLocaleString('es-CL')}
                     </td>
                   </tr>
                 ))

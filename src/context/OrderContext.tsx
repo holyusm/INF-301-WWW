@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -7,121 +8,86 @@ import {
   type ReactNode,
 } from 'react';
 import type { CartItem, Order, OrderStatus } from '../types';
+import { api } from '../api/client';
+import type { InlinePayment } from '../api/client';
+import { mapOrder } from '../api/mappers';
+import { useAuth } from './AuthContext';
 
-const STORAGE_KEY = 'fukusuke_orders';
-
-// Pedidos demo iniciales (pedidos históricos)
-const INITIAL_ORDERS: Order[] = [
-  {
-    id: 1,
-    userId: 1,
-    items: [],
-    total: 14970,
-    status: 'entregado',
-    createdAt: '2026-03-10T18:32:00',
-    address: 'Av. Pajaritos 1234, Maipú',
-    paymentMethod: 'tarjeta',
-  },
-  {
-    id: 2,
-    userId: 1,
-    items: [],
-    total: 9490,
-    status: 'preparando',
-    createdAt: '2026-03-12T20:05:00',
-    address: 'Av. Pajaritos 1234, Maipú',
-    paymentMethod: 'servipag',
-  },
-];
+const STAFF_ROLES = ['admin', 'dueno', 'cajero', 'despachador'];
 
 interface CreateOrderInput {
-  userId: number;
   items: CartItem[];
   total: number;
   address: string;
   paymentMethod: string;
+  paymentData?: InlinePayment;
 }
 
 interface OrderContextValue {
   orders: Order[];
-  createOrder: (input: CreateOrderInput) => Order;
-  cancelOrder: (orderId: number, cancelReason: string) => void;
+  refreshOrders: () => Promise<void>;
+  createOrder: (input: CreateOrderInput) => Promise<Order>;
+  cancelOrder: (orderId: string, cancelReason: string) => Promise<void>;
   /** Actualiza el estado de un pedido (usado por cajero y despachador) */
-  updateOrderStatus: (orderId: number, status: OrderStatus) => void;
+  updateOrderStatus: (orderId: string, status: OrderStatus) => Promise<void>;
 }
 
 const OrderContext = createContext<OrderContextValue | null>(null);
 
-function cloneItems(items: CartItem[]): CartItem[] {
-  return items.map((item) => ({ ...item }));
-}
-
-function canBeCancelled(status: Order['status']): boolean {
-  return (
-    status === 'pendiente' ||
-    status === 'pagado'    ||
-    status === 'preparando'||
-    status === 'entregado'
-  );
-}
-
 export function OrderProvider({ children }: { children: ReactNode }) {
-  const [orders, setOrders] = useState<Order[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (!saved) return INITIAL_ORDERS;
-    try {
-      return JSON.parse(saved) as Order[];
-    } catch {
-      return INITIAL_ORDERS;
+  const { user } = useAuth();
+  const [orders, setOrders] = useState<Order[]>([]);
+
+  const refreshOrders = useCallback(async () => {
+    if (!user) {
+      setOrders([]);
+      return;
     }
-  });
+    const apiOrders = STAFF_ROLES.includes(user.role)
+      ? await api.orders.getAll()
+      : await api.orders.getMy();
+    setOrders(apiOrders.map(mapOrder));
+  }, [user]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(orders));
-  }, [orders]);
+    void refreshOrders();
+  }, [refreshOrders]);
 
   const value = useMemo<OrderContextValue>(
     () => ({
       orders,
+      refreshOrders,
 
-      createOrder: ({ userId, items, total, address, paymentMethod }) => {
-        const newOrder: Order = {
-          id: Date.now(),
-          userId,
-          items: cloneItems(items),
-          total,
-          address,
+      createOrder: async ({ items, total, address, paymentMethod, paymentData }) => {
+        const apiOrder = await api.orders.create({
+          deliveryAddress: address,
           paymentMethod,
-          createdAt: new Date().toISOString(),
-          // El pago online se confirma automáticamente vía pasarela simulada.
-          // El cajero virtual verá este pedido y generará la boleta.
-          status: 'pagado',
-        };
-        setOrders((current) => [newOrder, ...current]);
-        return newOrder;
+          total,
+          items: items.map(({ productId, productName, unitPrice, quantity }) => ({
+            productId, productName, unitPrice, quantity,
+          })),
+          paymentData,
+        });
+        const order = mapOrder(apiOrder);
+        setOrders((current) => [order, ...current]);
+        return order;
       },
 
-      cancelOrder: (orderId, cancelReason) => {
+      cancelOrder: async (orderId, cancelReason) => {
         const reason = cancelReason.trim();
         if (!reason) return;
-        setOrders((current) =>
-          current.map((order) =>
-            order.id === orderId && canBeCancelled(order.status)
-              ? { ...order, status: 'anulado', cancelReason: reason }
-              : order
-          )
-        );
+        const apiOrder = await api.orders.updateStatus(orderId, { status: 'anulado', cancelReason: reason });
+        const updated = mapOrder(apiOrder);
+        setOrders((current) => current.map((o) => (o.id === orderId ? updated : o)));
       },
 
-      updateOrderStatus: (orderId, status) => {
-        setOrders((current) =>
-          current.map((order) =>
-            order.id === orderId ? { ...order, status } : order
-          )
-        );
+      updateOrderStatus: async (orderId, status) => {
+        const apiOrder = await api.orders.updateStatus(orderId, { status });
+        const updated = mapOrder(apiOrder);
+        setOrders((current) => current.map((o) => (o.id === orderId ? updated : o)));
       },
     }),
-    [orders]
+    [orders, refreshOrders]
   );
 
   return <OrderContext.Provider value={value}>{children}</OrderContext.Provider>;

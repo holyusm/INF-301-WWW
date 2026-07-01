@@ -1,26 +1,15 @@
 import { useState } from 'react';
-import { PRODUCTS, CATEGORY_LABELS } from '../data/products';
+import { useProducts } from '../hooks/useProducts';
 import ProductCard from '../components/ProductCard';
-import type { Product } from '../types';
 import './Menu.css';
 
-type Category = Product['category'] | 'todos';
-
-const CATEGORIES: { value: Category; label: string }[] = [
-  { value: 'todos', label: 'Todos' },
-  { value: 'rolls', label: CATEGORY_LABELS.rolls },
-  { value: 'nigiris', label: CATEGORY_LABELS.nigiris },
-  { value: 'temakis', label: CATEGORY_LABELS.temakis },
-  { value: 'combos',  label: CATEGORY_LABELS.combos },
-  { value: 'bebidas', label: CATEGORY_LABELS.bebidas },
-];
-
 export default function Menu() {
-  const [category, setCategory] = useState<Category>('todos');
+  const { products, categories, loading, error } = useProducts();
+  const [category, setCategory] = useState<string>('todos');
   const [search, setSearch] = useState('');
   const [onlyAvailable, setOnlyAvailable] = useState(false);
 
-  const filtered = PRODUCTS.filter((p) => {
+  const filtered = products.filter((p) => {
     const matchCat = category === 'todos' || p.category === category;
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());
     const matchAvail = !onlyAvailable || p.available;
@@ -32,7 +21,7 @@ export default function Menu() {
       <div className="container">
         <h1 className="page-title">Nuestro Menú</h1>
         <p className="page-subtitle">
-          Elige entre {PRODUCTS.length} preparaciones frescas y auténticas
+          Elige entre {products.length} preparaciones frescas y auténticas
         </p>
 
         <div className="menu-filters card border-0 shadow-sm">
@@ -45,13 +34,19 @@ export default function Menu() {
           />
 
           <div className="menu-filters__cats">
-            {CATEGORIES.map((c) => (
+            <button
+              className={`menu-filters__cat-btn btn btn-sm rounded-pill ${category === 'todos' ? 'btn-primary active' : 'btn-outline-primary'}`}
+              onClick={() => setCategory('todos')}
+            >
+              Todos
+            </button>
+            {categories.map((c) => (
               <button
-                key={c.value}
-                className={`menu-filters__cat-btn btn btn-sm rounded-pill ${category === c.value ? 'btn-primary active' : 'btn-outline-primary'}`}
-                onClick={() => setCategory(c.value)}
+                key={c.slug}
+                className={`menu-filters__cat-btn btn btn-sm rounded-pill ${category === c.slug ? 'btn-primary active' : 'btn-outline-primary'}`}
+                onClick={() => setCategory(c.slug)}
               >
-                {c.label}
+                {c.name}
               </button>
             ))}
 
@@ -67,7 +62,15 @@ export default function Menu() {
           </div>
         </div>
 
-        {filtered.length === 0 ? (
+        {loading ? (
+          <div className="menu-empty card border-0 shadow-sm">
+            <p>Cargando menú…</p>
+          </div>
+        ) : error ? (
+          <div className="menu-empty card border-0 shadow-sm">
+            <p>{error}</p>
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="menu-empty card border-0 shadow-sm">
             <p>No se encontraron productos con ese filtro.</p>
             <button className="btn btn-outline-primary" onClick={() => { setSearch(''); setCategory('todos'); }}>
