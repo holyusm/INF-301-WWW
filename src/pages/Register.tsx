@@ -329,7 +329,7 @@ export default function Register() {
               <select id="reg-gender" className="form-select" value={form.gender} onChange={set('gender')}>
                 <option value="M">Masculino</option>
                 <option value="F">Femenino</option>
-                <option value="otro">Prefiero no indicar</option>
+                <option value="OTRO">Prefiero no indicar</option>
               </select>
             </div>
           </div>

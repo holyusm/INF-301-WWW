@@ -29,7 +29,7 @@ export default function Orders() {
   const { showToast } = useToast();
   const [cancelId, setCancelId] = useState<number | null>(null);
   const [cancelReason, setCancelReason] = useState('');
-  const visibleOrders = orders.filter((order) => order.userId === user?.id);
+  const visibleOrders = orders.filter((order) => String(order.userId) === user?.id);
 
   const canCancel = (s: OrderStatus) =>
     s === 'pendiente' || s === 'pagado' || s === 'preparando' || s === 'entregado';

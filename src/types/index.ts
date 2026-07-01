@@ -18,6 +18,7 @@ export interface CartItem {
 
 // ── Dirección guardada ─────────────────────────────────────
 export interface SavedAddress {
+  id?: string;        // id del backend (undefined en direcciones aún no persistidas)
   label: string;      // e.g. "Casa", "Trabajo"
   address: string;
   commune: string;
@@ -25,7 +26,7 @@ export interface SavedAddress {
 
 // ── Usuario / Cliente ──────────────────────────────────────
 export interface User {
-  id: number;
+  id: string;
   run: string;
   fullName: string;
   email: string;
@@ -35,8 +36,8 @@ export interface User {
   province: string;
   region: string;
   birthDate: string;
-  gender: 'M' | 'F' | 'otro';
-  role: 'cliente' | 'admin' | 'cajero' | 'despachador' | 'dueño';
+  gender: 'M' | 'F' | 'OTRO';
+  role: 'cliente' | 'admin' | 'cajero' | 'despachador' | 'dueno';
   savedAddresses?: SavedAddress[];
 }
 
@@ -75,7 +76,7 @@ export interface RegisterForm {
   province: string;
   region: string;
   birthDate: string;
-  gender: 'M' | 'F' | 'otro';
+  gender: 'M' | 'F' | 'OTRO';
 }
 
 // ── Formulario de login ────────────────────────────────────

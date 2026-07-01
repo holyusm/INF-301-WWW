@@ -36,7 +36,7 @@ export default function App() {
 
           {/* Ruta protegida — admin / dueño */}
           <Route path="admin" element={
-            <ProtectedRoute roles={['admin', 'dueño']}><Admin /></ProtectedRoute>
+            <ProtectedRoute roles={['admin', 'dueno']}><Admin /></ProtectedRoute>
           } />
 
           {/* Ruta protegida — cajero virtual */}

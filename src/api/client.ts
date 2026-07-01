@@ -148,6 +148,21 @@ export interface LoginPayload {
   password: string;
 }
 
+export interface ApiSavedAddress {
+  id: string;
+  userId: string;
+  label: string;
+  address: string;
+  commune: string;
+  createdAt: string;
+}
+
+export interface AddAddressPayload {
+  label: string;
+  address: string;
+  commune: string;
+}
+
 export interface ApiCartItem {
   id: string;
   productId: string;
@@ -237,6 +252,14 @@ export const api = {
     login: (payload: LoginPayload) =>
       request<AuthResponse>('/auth/login', { method: 'POST', body: payload }),
     getProfile: () => request<ApiUser>('/auth/profile'),
+  },
+
+  users: {
+    getAddresses: () => request<ApiSavedAddress[]>('/users/addresses'),
+    addAddress: (payload: AddAddressPayload) =>
+      request<ApiSavedAddress>('/users/addresses', { method: 'POST', body: payload }),
+    removeAddress: (id: string) =>
+      request<void>(`/users/addresses/${id}`, { method: 'DELETE' }),
   },
 
   products: {

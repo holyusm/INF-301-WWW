@@ -43,7 +43,7 @@ export default function Cashier() {
   );
 
   const findUser = (userId: number): User | undefined =>
-    users.find((u) => u.id === userId);
+    users.find((u) => u.id === String(userId));
 
   const handleRealizarVenta = (order: Order) => {
     // Realizar venta: confirma el pedido al área de cocina y genera boleta

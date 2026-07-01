@@ -23,7 +23,7 @@ import './Admin.css';
 // ── Constantes ─────────────────────────────────────────────
 const PRODUCTS_KEY = 'fukusuke_products';
 const REGIONS      = ['Región Metropolitana', 'Valparaíso', 'Biobío', 'Araucanía', 'Los Lagos'];
-const STAFF_ROLES  = ['admin', 'cajero', 'despachador', 'dueño'] as const;
+const STAFF_ROLES  = ['admin', 'cajero', 'despachador', 'dueno'] as const;
 
 type Tab = 'productos' | 'clientes' | 'usuarios' | 'pedidos' | 'reportes';
 
@@ -68,7 +68,7 @@ interface UserFormState {
   run: string; fullName: string; email: string; password: string;
   phone: string; address: string; commune: string;
   province: string; region: string; birthDate: string;
-  gender: 'M' | 'F' | 'otro'; role: User['role'];
+  gender: 'M' | 'F' | 'OTRO'; role: User['role'];
 }
 
 const EMPTY_USER: UserFormState = {
@@ -97,10 +97,10 @@ export default function Admin() {
   // ── Usuarios / Clientes ──
   const { users, addUser, updateUser, deleteUser } = useAuth();
   const [userForm, setUserForm]             = useState<UserFormState>(EMPTY_USER);
-  const [editUserId, setEditUserId]         = useState<number | null>(null);
+  const [editUserId, setEditUserId]         = useState<string | null>(null);
   const [showUserForm, setShowUserForm]     = useState(false);
   const [userFormErrors, setUserFormErrors] = useState<Partial<UserFormState>>({});
-  const [deleteUserId, setDeleteUserId]     = useState<number | null>(null);
+  const [deleteUserId, setDeleteUserId]     = useState<string | null>(null);
 
   // ── Reportes: semana actual (offset 0 = esta semana, -1 = anterior, etc.) ──
   const [weekOffset, setWeekOffset] = useState(0);
@@ -770,7 +770,7 @@ export default function Admin() {
 interface UserFormProps {
   form: UserFormState;
   errors: Partial<UserFormState>;
-  editId: number | null;
+  editId: string | null;
   isClient: boolean;
   onChange: (field: keyof UserFormState) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
   onSave: () => void;
@@ -828,7 +828,7 @@ function UserForm({ form, errors, editId, isClient, onChange, onSave, onCancel }
           <select className="form-select" value={form.gender} onChange={onChange('gender')}>
             <option value="M">Masculino</option>
             <option value="F">Femenino</option>
-            <option value="otro">Otro</option>
+            <option value="OTRO">Otro</option>
           </select>
         </div>
         <div className="col-12">

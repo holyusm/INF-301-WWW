@@ -4,14 +4,6 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import './Auth.css';
 
-const DEMO_ACCOUNTS = [
-  { email: 'maria@example.com',    role: 'Cliente',      pw: '123456' },
-  { email: 'admin@fukusuke.cl',    role: 'Admin',        pw: '123456' },
-  { email: 'cajero@fukusuke.cl',   role: 'Cajero',       pw: '123456' },
-  { email: 'despacho@fukusuke.cl', role: 'Despachador',  pw: '123456' },
-  { email: 'dueno@fukusuke.cl',    role: 'Dueño',        pw: '123456' },
-];
-
 export default function Login() {
   const { login }     = useAuth();
   const { showToast } = useToast();
@@ -23,7 +15,6 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error,    setError]    = useState('');
   const [loading,  setLoading]  = useState(false);
-  const [showDemo, setShowDemo] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -43,13 +34,6 @@ export default function Login() {
       setError('Correo o contraseña incorrectos. Verifica tus datos.');
       showToast('Credenciales inválidas. Verifica tu correo y contraseña.', 'danger');
     }
-  };
-
-  const fillDemo = (email: string, pw: string) => {
-    setEmail(email);
-    setPassword(pw);
-    setError('');
-    setShowDemo(false);
   };
 
   return (
@@ -109,38 +93,6 @@ export default function Login() {
           ¿No tienes cuenta?{' '}
           <Link to="/register">Regístrate aquí</Link>
         </p>
-
-        {/* ── Cuentas demo ── */}
-        <div className="auth-card__hint">
-          <button
-            type="button"
-            className="btn btn-link btn-sm p-0 text-decoration-none"
-            onClick={() => setShowDemo((v) => !v)}
-            style={{ fontSize: '0.82rem' }}
-          >
-            💡 {showDemo ? 'Ocultar' : 'Ver'} cuentas de demostración
-          </button>
-
-          {showDemo && (
-            <div style={{ marginTop: '0.6rem' }}>
-              {DEMO_ACCOUNTS.map(({ email: e, role, pw }) => (
-                <button
-                  key={e}
-                  type="button"
-                  className="demo-account-btn"
-                  onClick={() => fillDemo(e, pw)}
-                  title={`Contraseña: ${pw}`}
-                >
-                  <span className="demo-role">{role}</span>
-                  <span className="demo-email">{e}</span>
-                </button>
-              ))}
-              <p style={{ fontSize: '0.75rem', color: '#999', margin: '0.4rem 0 0' }}>
-                Contraseña de todas las cuentas: <code>123456</code>
-              </p>
-            </div>
-          )}
-        </div>
       </div>
     </main>
   );

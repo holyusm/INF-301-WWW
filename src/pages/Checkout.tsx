@@ -102,7 +102,8 @@ export default function Checkout() {
     }
 
     const order = createOrder({
-      userId: user.id,
+      // El OrderContext local aún usa userId numérico; se migra en el paso 5.
+      userId: user.id as unknown as number,
       items,
       total: totalPrice,
       address: `${address}, ${commune}`,

@@ -21,7 +21,7 @@ export default function Navbar() {
 
   const close = () => setMenuOpen(false);
 
-  const isAdmin      = user?.role === 'admin' || user?.role === 'dueño';
+  const isAdmin      = user?.role === 'admin' || user?.role === 'dueno';
   const isCajero     = user?.role === 'cajero'      || isAdmin;
   const isDespachador= user?.role === 'despachador' || isAdmin;
   const isCliente    = user?.role === 'cliente';

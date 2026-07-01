@@ -37,7 +37,7 @@ export default function Dispatcher() {
   );
 
   const getUserName = (userId: number) => {
-    const u = users.find((u) => u.id === userId);
+    const u = users.find((u) => u.id === String(userId));
     return u ? u.fullName : `Usuario #${userId}`;
   };
 
