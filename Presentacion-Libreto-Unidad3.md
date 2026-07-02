@@ -1,13 +1,13 @@
 # Libreto de Presentación — Unidad 3
-### Integración del sistema: Software, Taiga.io, Google Stitch y Diagrama de Clases del Backend
+### Integración del sistema: Software, Taiga.io, Figma y Diagrama de Clases del Backend
 
 > **Para el presentador:** este documento es la guía completa del video. Cada bloque indica qué mostrar en pantalla (**[PANTALLA]**) y qué decir (**[DICE]**). No lo leas literal frente a cámara — apóyate en él, dilo con tus palabras. Duración objetivo: **10-12 minutos**. Todos los integrantes deben participar (la rúbrica lo exige explícitamente).
 >
-> **Nota sobre la herramienta de diseño:** el equipo no usó Figma — usó **Google Stitch**. La rúbrica acepta explícitamente "Figma o herramienta similar", así que donde diga C5/C7 nos referimos a Stitch. Revisé el proyecto real (`Fukusuke Sushi Delivery – Rediseño Bootstrap 5`, sistema de diseño "The Editorial Omakese") y confirmé algo importante para el video: **el color primario (`#c0392b`) y la tipografía Poppins para títulos definidos en Stitch ya están aplicados en el CSS real del proyecto** (`src/index.css` y `index.html` — hay incluso un comentario en el código que dice "Poppins — premium headings (Stitch design system)"). Esto es evidencia concreta y verificable de coherencia C5, no hay que inventar nada.
+> **Nota sobre la herramienta de diseño:** el equipo diseñó en **Figma**, tal como pide la rúbrica en C5/C7. Revisé el proyecto real (`Fukusuke Sushi Delivery – Rediseño Bootstrap 5`, sistema de diseño "The Editorial Omakese") y confirmé algo importante para el video: **el color primario (`#c0392b`) y la tipografía Poppins para títulos definidos en Figma ya están aplicados en el CSS real del proyecto** (`src/index.css` y `index.html`). Esto es evidencia concreta y verificable de coherencia C5, no hay que inventar nada.
 >
-> Stitch tiene **4 pantallas diseñadas**: Home, Menú, Iniciar Sesión y Crear Cuenta. Checkout, carrito, cajero, despachador y admin **no tienen mockup individual en Stitch** — se construyeron directamente en código reutilizando el mismo sistema de diseño (colores, tipografía, forma de los componentes). Esto no es una debilidad si lo explican bien en el video: es una decisión de alcance razonable, y así la planteamos en la Parte 6.
+> Figma tiene **4 pantallas diseñadas**: Home, Menú, Iniciar Sesión y Crear Cuenta. Checkout, carrito, cajero, despachador y admin **no tienen mockup individual en Figma** — se construyeron directamente en código reutilizando el mismo sistema de diseño (colores, tipografía, forma de los componentes). Esto no es una debilidad si lo explican bien en el video: es una decisión de alcance razonable, y así la planteamos en la Parte 6.
 >
-> **Quedan 3 bloques marcados con 🟡**, todos sobre Taiga — no tengo acceso a esa herramienta, así que no puedo escribir el contenido específico de sus historias. Todo lo demás (Stitch, arquitectura, demo del software, reportería) ya está escrito con el estado real y verificado del sistema.
+> **Quedan 3 bloques marcados con 🟡**, todos sobre Taiga — no tengo acceso a esa herramienta, así que no puedo escribir el contenido específico de sus historias. Todo lo demás (Figma, arquitectura, demo del software, reportería) ya está escrito con el estado real y verificado del sistema.
 
 ---
 
@@ -17,8 +17,8 @@
 - [ ] Frontend corriendo (`npm run dev`), con `VITE_API_URL` apuntando al backend.
 - [ ] Los 5 usuarios demo creados y probados (ver tabla de credenciales al final de este documento).
 - [ ] Taiga.io actualizado: historias de esta unidad con criterios de aceptación, tablero reflejando qué está "Terminado".
-- [ ] Proyecto de Stitch abierto y accesible (`Fukusuke Sushi Delivery – Rediseño Bootstrap 5`), con las 4 pantallas visibles: Home, Menú, Iniciar Sesión, Crear Cuenta.
-- [ ] Pestañas del navegador abiertas y listas: Taiga, Stitch, `BackEnd-Arquitectura.md` (en GitHub o VS Code con preview), la app corriendo en `localhost:5173`.
+- [ ] Proyecto de Figma abierto y accesible (`Fukusuke Sushi Delivery – Rediseño Bootstrap 5`), con las 4 pantallas visibles: Home, Menú, Iniciar Sesión, Crear Cuenta.
+- [ ] Pestañas del navegador abiertas y listas: Taiga, Figma, `BackEnd-Arquitectura.md` (en GitHub o VS Code con preview), la app corriendo en `localhost:5173`.
 - [ ] Decidido quién presenta cada bloque (sugerencia de reparto al final).
 - [ ] Volumen de micrófono y tamaño de fuente de pantalla/terminal probados.
 
@@ -54,13 +54,13 @@ Abrir `BackEnd-Arquitectura.md` → sección **1.1 Microservicios Identificados*
 ### [DICE] (adaptar a lo que muestren)
 > "En Taiga organizamos el trabajo en [N] épicas: por ejemplo, 'Checkout y pagos', 'Panel de administración', 'Reportería'. Cada historia tiene criterios de aceptación concretos — por ejemplo, la historia 'Como cliente quiero pagar mi pedido con tarjeta' tiene como criterio que el pago se valide contra el backend real y el pedido cambie de estado automáticamente."
 
-### [PANTALLA] — Diseño en Google Stitch
-Abrir el proyecto de Stitch **"Fukusuke Sushi Delivery – Rediseño Bootstrap 5"**. Mostrar el sistema de diseño (paleta de colores, tipografía) y recorrer rápido las 4 pantallas: **Home**, **Nuestro Menú**, **Iniciar Sesión**, **Crear Cuenta**.
+### [PANTALLA] — Diseño en Figma
+Abrir el proyecto de Figma **"Fukusuke Sushi Delivery – Rediseño Bootstrap 5"**. Mostrar el sistema de diseño (paleta de colores, tipografía) y recorrer rápido las 4 pantallas: **Home**, **Nuestro Menú**, **Iniciar Sesión**, **Crear Cuenta**.
 
 ### [DICE]
-> "Antes de programar, diseñamos en Google Stitch un sistema de diseño al que llamamos 'The Editorial Omakese' — buscábamos alejarnos de la estética típica de 'delivery rápido' y acercarnos a algo más premium, como una revista editorial: rojo imperial como color principal, tipografía Poppins para los títulos, mucho espacio en blanco. Prototipamos 4 pantallas clave: Home, Menú, Login y Crear Cuenta.
+> "Antes de programar, diseñamos en Figma un sistema de diseño al que llamamos 'The Editorial Omakese' — buscábamos alejarnos de la estética típica de 'delivery rápido' y acercarnos a algo más premium, como una revista editorial: rojo imperial como color principal, tipografía Poppins para los títulos, mucho espacio en blanco. Prototipamos 4 pantallas clave: Home, Menú, Login y Crear Cuenta.
 >
-> Esto no se quedó en el papel: el color primario `#c0392b` y la tipografía Poppins para encabezados están literalmente en el CSS del proyecto real — no los volvimos a elegir en el código, los trajimos directo del sistema de diseño de Stitch."
+> Esto no se quedó en el papel: el color primario `#c0392b` y la tipografía Poppins para encabezados están literalmente en el CSS del proyecto real — no los volvimos a elegir en el código, los trajimos directo del sistema de diseño de Figma."
 
 ---
 
@@ -133,19 +133,19 @@ Seguir en `/admin` con el usuario admin, ir a la pestaña **Reportes**.
 ## PARTE 6 — Trazabilidad e integración global (Criterio C7 — 20%, el de mayor peso)
 **Tiempo sugerido: 3 minutos. Esta es la parte más importante del video — vale el doble que cualquier otro criterio individual.**
 
-La rúbrica pide tomar **al menos una historia** y seguirla por los 4 artefactos. Usamos **"Crear cuenta"**, porque es la que tiene mockup propio en Stitch y una decisión de arquitectura bien documentada detrás — no hay que inventar ni forzar nada.
+La rúbrica pide tomar **al menos una historia** y seguirla por los 4 artefactos. Usamos **"Crear cuenta"**, porque es la que tiene mockup propio en Figma y una decisión de arquitectura bien documentada detrás — no hay que inventar ni forzar nada.
 
 ### 🟡 [PANTALLA] — Taiga (completar)
 > Mostrar la historia "Como visitante quiero crear una cuenta para poder comprar" (o el nombre que le hayan dado) con su criterio de aceptación en Taiga.
 
-### [PANTALLA] — Stitch (ya verificado, pantalla real)
-Abrir la pantalla **"Crear Cuenta - Fukusuke"** en el proyecto de Stitch.
+### [PANTALLA] — Figma (ya verificado, pantalla real)
+Abrir la pantalla **"Crear Cuenta - Fukusuke"** en el proyecto de Figma.
 
 ### [PANTALLA] — Backend (referencias reales)
 Abrir `BackEnd-Arquitectura.md` → sección **Decisión 2 — Separar auth-service de user-service**.
 
 ### [DICE]
-> "En Stitch diseñamos la pantalla de registro con el mismo sistema 'Editorial Omakese'. Al implementarla, surgió una decisión de arquitectura que no se ve en el mockup pero sí en el diagrama de clases: cuando alguien crea una cuenta, en realidad se están creando **dos registros en dos microservicios distintos** — la credencial (email, contraseña, rol) en `auth-service`, y el perfil (nombre, RUN, dirección) en `user-service`.
+> "En Figma diseñamos la pantalla de registro con el mismo sistema 'Editorial Omakese'. Al implementarla, surgió una decisión de arquitectura que no se ve en el mockup pero sí en el diagrama de clases: cuando alguien crea una cuenta, en realidad se están creando **dos registros en dos microservicios distintos** — la credencial (email, contraseña, rol) en `auth-service`, y el perfil (nombre, RUN, dirección) en `user-service`.
 >
 > La pregunta de diseño fue: ¿debería `auth-service` crear el perfil directamente, importando la entidad `UserProfile`? Lo descartamos — eso rompería la regla de que ningún microservicio accede a las tablas de otro. La solución fue que `auth-service` **delegue** la creación del perfil llamando a un método de `UsersService` (`createProfile`), sin importar jamás la entidad. Eso está documentado en la Decisión 2 de nuestro backend, y es exactamente lo que se ejecuta cuando alguien completa este formulario."
 
@@ -154,10 +154,10 @@ Ir a `/register`, completar el formulario y crear una cuenta nueva en vivo.
 > "Esto es lo que acabamos de explicar, funcionando: un solo formulario, un solo click, y por debajo dos microservicios coordinándose sin acoplarse."
 
 ### [DICE] — Nota sobre las pantallas sin mockup propio (justificación de decisión, no debilidad)
-> "Vale aclarar algo: en Stitch diseñamos 4 pantallas — Home, Menú, Login y Crear Cuenta. Checkout, el panel de cajero, despachador y administración **no tienen un mockup individual**. La decisión fue priorizar el tiempo de diseño en las pantallas de primer contacto con el usuario, y para el resto extender directamente en código el mismo sistema de diseño — mismo color primario, misma tipografía, mismos componentes de Bootstrap ya estilados. No es que esas pantallas queden 'sin diseño': heredan el mismo lenguaje visual, solo que no pasaron por un mockup separado antes de programarse."
+> "Vale aclarar algo: en Figma diseñamos 4 pantallas — Home, Menú, Login y Crear Cuenta. Checkout, el panel de cajero, despachador y administración **no tienen un mockup individual**. La decisión fue priorizar el tiempo de diseño en las pantallas de primer contacto con el usuario, y para el resto extender directamente en código el mismo sistema de diseño — mismo color primario, misma tipografía, mismos componentes de Bootstrap ya estilados. No es que esas pantallas queden 'sin diseño': heredan el mismo lenguaje visual, solo que no pasaron por un mockup separado antes de programarse."
 
 ### [DICE] — Cierre de la trazabilidad
-> "Entonces: la historia nace en Taiga, se diseña en Stitch, se implementa respetando el límite entre microservicios documentado en el diagrama de clases, y funciona en vivo en el software — los cuatro artefactos cuentan la misma historia."
+> "Entonces: la historia nace en Taiga, se diseña en Figma, se implementa respetando el límite entre microservicios documentado en el diagrama de clases, y funciona en vivo en el software — los cuatro artefactos cuentan la misma historia."
 
 ---
 
@@ -176,7 +176,7 @@ Ir a `/register`, completar el formulario y crear una cuenta nueva en vivo.
 ## Cierre
 
 ### [DICE]
-> "Eso fue Fukusuke: un sistema donde Taiga, Stitch, la arquitectura de microservicios y el software funcionando cuentan la misma historia, con reportería real apoyando la toma de decisiones. Gracias."
+> "Eso fue Fukusuke: un sistema donde Taiga, Figma, la arquitectura de microservicios y el software funcionando cuentan la misma historia, con reportería real apoyando la toma de decisiones. Gracias."
 
 ---
 
@@ -189,7 +189,7 @@ Ir a `/register`, completar el formulario y crear una cuenta nueva en vivo.
 | Demo software (Parte 3) | 3-4 min | Integrante 3 (idealmente quien más maneja la app) |
 | Cumplimiento Taiga (Parte 4) | integrado en Parte 3 | Integrante 2 o 3 |
 | Reportería (Parte 5) | 1.5 min | Integrante 4 |
-| Trazabilidad (Parte 6) — la más importante | 3 min | Todo el equipo puede intervenir aquí: uno muestra Taiga, otro Stitch, otro el backend, otro el software |
+| Trazabilidad (Parte 6) — la más importante | 3 min | Todo el equipo puede intervenir aquí: uno muestra Taiga, otro Figma, otro el backend, otro el software |
 | Limitaciones + cierre (Parte 7) | 1 min | Integrante 1 |
 
 Si el equipo es de menos personas, combinen bloques — lo importante es que **todos hablen en algún momento**, tal como exige la rúbrica.
