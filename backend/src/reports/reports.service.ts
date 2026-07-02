@@ -109,11 +109,17 @@ export class ReportsService {
 
     await this.dailySalesRepo.save(dailySales);
 
-    // Update weekly totals
-    report.totalRevenue = Number(report.totalRevenue) + amount;
-    report.totalOrders = Number(report.totalOrders) + 1;
+    // Update weekly totals — se usa update() (no save()) para tocar solo
+    // estas dos columnas: WeeklyReport.dailySales es una relación eager, y
+    // save() con el `report` completo intenta "reconciliar" esa relación
+    // contra la BD, lo que desasociaba (weeklyReportId = NULL) el
+    // DailySales recién insertado arriba en la misma llamada.
+    await this.weeklyReportRepo.update(report.id, {
+      totalRevenue: Number(report.totalRevenue) + amount,
+      totalOrders: Number(report.totalOrders) + 1,
+    });
 
-    return this.weeklyReportRepo.save(report);
+    return this.getWeekReport(weekId);
   }
 
   async getRecentWeeks(n = 4): Promise<WeeklyReport[]> {

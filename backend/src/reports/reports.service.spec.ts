@@ -178,11 +178,13 @@ describe('ReportsService', () => {
         totalOrders: 1,
       };
 
-      weeklyReportRepo.findOne!.mockResolvedValue(existingReport);
+      weeklyReportRepo.findOne!
+        .mockResolvedValueOnce(existingReport)
+        .mockResolvedValueOnce(savedReport);
       dailySalesRepo.findOne!.mockResolvedValue(null);
       dailySalesRepo.create!.mockReturnValue(newDailySales);
       dailySalesRepo.save!.mockResolvedValue(savedDailySales);
-      weeklyReportRepo.save!.mockResolvedValue(savedReport);
+      weeklyReportRepo.update!.mockResolvedValue({ affected: 1 });
 
       const result = await service.registerSale(amount, saleDate);
 
@@ -195,7 +197,8 @@ describe('ReportsService', () => {
         }),
       );
       expect(dailySalesRepo.save).toHaveBeenCalled();
-      expect(weeklyReportRepo.save).toHaveBeenCalledWith(
+      expect(weeklyReportRepo.update).toHaveBeenCalledWith(
+        existingReport.id,
         expect.objectContaining({
           totalRevenue: amount,
           totalOrders: 1,
@@ -234,7 +237,9 @@ describe('ReportsService', () => {
         totalOrders: 2,
       };
 
-      weeklyReportRepo.findOne!.mockResolvedValue(existingReport);
+      weeklyReportRepo.findOne!
+        .mockResolvedValueOnce(existingReport)
+        .mockResolvedValueOnce(savedReport);
       dailySalesRepo.findOne!.mockResolvedValue(existingDailySales);
       dailySalesRepo.save!.mockResolvedValue({
         ...existingDailySales,
@@ -242,10 +247,14 @@ describe('ReportsService', () => {
         orderCount: 2,
         avgOrderValue: 4000,
       });
-      weeklyReportRepo.save!.mockResolvedValue(savedReport);
+      weeklyReportRepo.update!.mockResolvedValue({ affected: 1 });
 
       const result = await service.registerSale(amount, saleDate);
 
+      expect(weeklyReportRepo.update).toHaveBeenCalledWith(
+        existingReport.id,
+        expect.objectContaining({ totalRevenue: 8000, totalOrders: 2 }),
+      );
       expect(result.totalRevenue).toBe(8000);
       expect(result.totalOrders).toBe(2);
     });
@@ -296,15 +305,17 @@ describe('ReportsService', () => {
       };
       const updatedReport = { ...existingReport, totalRevenue: 9500, totalOrders: 1 };
 
-      weeklyReportRepo.findOne!.mockResolvedValue(existingReport);
+      weeklyReportRepo.findOne!
+        .mockResolvedValueOnce(existingReport)
+        .mockResolvedValueOnce(updatedReport);
       dailySalesRepo.findOne!.mockResolvedValue(null);
       dailySalesRepo.create!.mockReturnValue({ revenue: 0, orderCount: 0, avgOrderValue: 0 });
       dailySalesRepo.save!.mockResolvedValue({ revenue: 9500, orderCount: 1, avgOrderValue: 9500 });
-      weeklyReportRepo.save!.mockResolvedValue(updatedReport);
+      weeklyReportRepo.update!.mockResolvedValue({ affected: 1 });
 
       await service.handleOrderPaid({ orderId: 'order-1', amount: 9500 });
 
-      expect(weeklyReportRepo.save).toHaveBeenCalled();
+      expect(weeklyReportRepo.update).toHaveBeenCalled();
     });
   });
 });
