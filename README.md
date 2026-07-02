@@ -2,7 +2,7 @@
 
 Aplicación frontend de e-commerce para sushi (proyecto académico INF-301-WWW), construida con React + TypeScript + Vite.
 
-El proyecto simula un flujo completo de compra (catálogo, carrito, checkout y pedidos) **sin backend**.
+El proyecto implementa un flujo completo de compra (catálogo, carrito, checkout y pedidos) **conectado a un backend real** de microservicios en NestJS + PostgreSQL (ver [`/backend`](backend/README.md)). Menú, carrito, checkout con pago real, pedidos, paneles de cajero/despachador/administración y reportería con Chart.js consumen la API real — no hay datos mock ni simulados.
 
 ## Tabla de contenido
 
@@ -14,7 +14,7 @@ El proyecto simula un flujo completo de compra (catálogo, carrito, checkout y p
 - [Scripts disponibles](#scripts-disponibles)
 - [Flujo demo](#flujo-demo)
 - [Autenticación demo](#autenticacion-demo)
-- [Pago con tarjeta (simulado)](#pago-con-tarjeta-simulado)
+- [Pago con tarjeta](#pago-con-tarjeta)
 - [Rutas de la aplicación](#rutas-de-la-aplicacion)
 - [Estructura del proyecto](#estructura-del-proyecto)
 - [Decisiones y alcance](#decisiones-y-alcance)
@@ -25,13 +25,11 @@ El proyecto simula un flujo completo de compra (catálogo, carrito, checkout y p
 
 Fukusuke Frontend implementa:
 
-- Landing page y menú de productos.
-- Registro e inicio de sesión simulados.
-- Carrito con actualización de cantidades.
-- Checkout protegido por autenticación.
-- Selección de método de pago.
-- Formulario de tarjeta de crédito/débito **solo visual/simulado**.
-- Vista de pedidos y panel administrativo (demo de interfaz).
+- Landing page y menú de productos (sembrados desde el backend).
+- Registro e inicio de sesión reales, con JWT emitido por el backend.
+- Carrito sincronizado con el backend por usuario autenticado.
+- Checkout protegido por autenticación, con pago real por tarjeta (Strategy pattern en el backend) y servipag/transferencia simulados.
+- Vista de "Mis pedidos", panel de cajero, panel de despachador y panel de administración (productos, pedidos, usuarios y reportería con Chart.js), todos contra datos reales.
 
 ## Stack tecnologico
 
@@ -40,6 +38,8 @@ Fukusuke Frontend implementa:
 - Vite 5
 - React Router DOM 6
 - Bootstrap 5 (con estilos de marca propios)
+- Chart.js + react-chartjs-2 (reportería del panel admin)
+- Backend: NestJS + TypeORM + PostgreSQL — ver [`/backend`](backend/README.md)
 
 ## Requisitos
 
@@ -62,11 +62,14 @@ Fukusuke Frontend implementa:
 
 ### Estado actual frente a los no funcionales
 
-- **Cumplido parcialmente**: arquitectura separada en `pages`, `components`, `context`, `data` y `types`.
-- **Cumplido parcialmente**: diseño responsive y validaciones básicas de formularios.
-- **Pendiente para próximas unidades**: backend real, base de datos, web services, cifrado real, validación real de correo, ayuda en línea y manuales.
+- **Cumplido**: backend real con arquitectura de microservicios (NestJS + PostgreSQL), autenticación JWT con contraseñas hasheadas (bcrypt), Web Services vía API REST — ver [`/backend`](backend/README.md).
+- **Cumplido**: arquitectura separada en `pages`, `components`, `context`, `hooks`, `api` y `types` en el frontend, y por módulos/capas en el backend.
+- **Cumplido parcialmente**: diseño responsive y validaciones de formularios (frontend) + DTOs con `class-validator` (backend).
+- **Pendiente**: ayuda en línea/manuales de usuario estructurados, API de correo con proveedor productivo (hoy EmailJS opcional).
 
 ## Instalacion y ejecucion
+
+Este frontend necesita el **backend corriendo** (ver [`backend/README.md`](backend/README.md) para levantar Postgres, sembrar productos y crear usuarios demo). Con el backend arriba en `http://localhost:3000/api`:
 
 1. Clona o descarga este repositorio.
 2. Abre una terminal en la carpeta raíz del proyecto.
@@ -76,13 +79,21 @@ Fukusuke Frontend implementa:
 npm install
 ```
 
-4. Levanta servidor de desarrollo:
+4. Configura la URL del backend en `.env.local` (no se commitea):
+
+```bash
+cp .env.example .env.local
+```
+
+Confirma que `.env.local` tenga: `VITE_API_URL=http://localhost:3000/api`
+
+5. Levanta servidor de desarrollo:
 
 ```bash
 npm run dev
 ```
 
-5. Abre en navegador la URL que entrega Vite (normalmente `http://localhost:5173/`).
+6. Abre en navegador la URL que entrega Vite (normalmente `http://localhost:5173/`).
 
 ## Scripts disponibles
 
@@ -94,25 +105,30 @@ npm run preview  # previsualiza el build generado
 
 ## Flujo demo
 
-1. Ir a `Menú` y agregar productos.
-2. Ir a `Carrito` para revisar totales.
+1. Ir a `Menú` y agregar productos (vienen del backend real, sembrados con `npm run seed`).
+2. Ir a `Carrito` para revisar totales (sincronizado con el backend por usuario).
 3. Ir a `Checkout` (requiere sesión).
 4. Elegir método de pago:
-   - Tarjeta crédito/débito (simulado)
-   - Servipag
-   - Transferencia bancaria
+   - Tarjeta crédito/débito — **se procesa contra el backend real** (Strategy pattern), puede aprobarse o rechazarse según los datos ingresados.
+   - Servipag / Transferencia bancaria — simulados (el pedido queda `pendiente`, sin cobro real).
 5. Confirmar pedido y revisar en `Mis pedidos`.
+6. Con un usuario `cajero` puedes procesar el pedido en `/cashier`; con `despachador`, completarlo en `/dispatcher`; con `admin`/`dueno`, ver el reporte de ventas en `/admin` (tab Reportes).
 
 ## Autenticacion demo
 
-La autenticación está simulada en frontend.
+El login es real: crea contraseñas con bcrypt y emite JWT desde el backend (`POST /api/auth/login`). Usuarios demo disponibles después de seguir el setup del backend (ver [`backend/README.md`](backend/README.md#5-sembrar-datos-demo-productos--usuarios)):
 
-- Email demo válido: `maria@example.com`
-- Contraseña: cualquiera (en modo demo)
+| Rol | Email | Contraseña |
+|---|---|---|
+| Cliente | `cliente@fukusuke.cl` | `Fukusuke2026` |
+| Cajero | `cajero@fukusuke.cl` | `Fukusuke2026` |
+| Despachador | `despachador@fukusuke.cl` | `Fukusuke2026` |
+| Admin | `admin@fukusuke.cl` | `Fukusuke2026` |
+| Dueño | `dueno@fukusuke.cl` | `Fukusuke2026` |
 
-La sesión se guarda en `sessionStorage` con la clave `fukusuke_user`.
+El JWT se guarda en `sessionStorage` bajo la clave `fukusuke_token`.
 
-## Pago con tarjeta (simulado)
+## Pago con tarjeta
 
 En Checkout existe un formulario de tarjeta con:
 
@@ -122,11 +138,7 @@ En Checkout existe un formulario de tarjeta con:
 - CVV
 - Detección visual de marca (Visa/Mastercard/Amex)
 
-Importante:
-
-- No hay conexión a pasarela real.
-- No hay tokenización ni cobro real.
-- Es solo una simulación de interfaz para frontend.
+El pago se envía al backend (`POST /api/orders` con `paymentData`), que lo valida y procesa mediante el patrón Strategy (`CreditCardPayment`). Los botones "Perfil de éxito"/"Perfil de fracaso" en la UI completan (o dejan incompletos a propósito) los datos de la tarjeta para forzar una aprobación o un rechazo real del backend — no es una simulación puramente visual.
 
 ## Rutas de la aplicacion
 
@@ -143,25 +155,36 @@ Protegidas (usuario autenticado):
 - `/checkout`
 - `/orders`
 
-Protegida por roles (`admin` o `dueño`):
+Protegidas por rol:
 
-- `/admin`
+- `/admin` — `admin` o `dueno`
+- `/cashier` — `cajero` o `admin`
+- `/dispatcher` — `despachador` o `admin`
 
 ## Estructura del proyecto
 
 ```text
 src/
+  api/
+    client.ts       ← cliente HTTP tipado contra el backend
+    mappers.ts       ← Api* (backend) → tipos de dominio del frontend
   components/
+    CartSidebar.tsx
     Footer.tsx
     Layout.tsx
     Navbar.tsx
     ProductCard.tsx
     ProtectedRoute.tsx
+    Boleta.tsx
   context/
     AuthContext.tsx
     CartContext.tsx
-  data/
-    products.ts
+    OrderContext.tsx
+    ToastContext.tsx
+  hooks/
+    useProducts.ts
+    useUsers.ts
+    useSessionTimeout.ts
   pages/
     Home.tsx
     Menu.tsx
@@ -170,16 +193,21 @@ src/
     Cart.tsx
     Checkout.tsx
     Orders.tsx
+    Cashier.tsx
+    Dispatcher.tsx
     Admin.tsx
   types/
     index.ts
+  utils/
+    isoWeek.ts
+    emailService.ts
 ```
 
 ## Decisiones y alcance
 
-- Proyecto diseñado para evaluación frontend (sin API ni base de datos).
-- Datos de productos y pedidos en memoria/local del navegador.
-- Enfoque en UX/UI, navegación, estado y validaciones de formulario.
+- Frontend conectado a un backend real de microservicios (NestJS + PostgreSQL) — ver [`/backend`](backend/README.md).
+- Productos, carrito, pedidos y usuarios se persisten en PostgreSQL, no en el navegador.
+- Enfoque en UX/UI, navegación, estado, validaciones de formulario y consistencia con la arquitectura del backend.
 
 ## Troubleshooting
 
@@ -213,7 +241,12 @@ Puede ser caché del servidor TypeScript de VS Code. Solución típica:
 - Reiniciar TS Server.
 - Recargar ventana de VS Code.
 
+## Mejoras futuras
 
+- Módulo de ayuda en línea y manuales de usuario estructurados.
+- Reemplazar EmailJS por un proveedor de correo transaccional productivo.
+- Tests automatizados de frontend (hoy la cobertura de tests está solo en el backend).
+- Deploy continuo a Vercel/Railway sincronizado con `main` (la configuración ya existe en el repo, ver `vercel.json` y `backend/railway.json`).
 
 ---
 
