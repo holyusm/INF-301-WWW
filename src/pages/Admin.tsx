@@ -12,9 +12,9 @@ import { Bar } from 'react-chartjs-2';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 import { useOrders } from '../context/OrderContext';
-import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useProducts } from '../hooks/useProducts';
+import { useUsers } from '../hooks/useUsers';
 import { api, ApiError } from '../api/client';
 import type { ApiWeeklyReport } from '../api/client';
 import { getWeekId } from '../utils/isoWeek';
@@ -94,12 +94,11 @@ export default function Admin() {
   const [cancelReason, setCancelReason] = useState('');
 
   // ── Usuarios / Clientes ──
-  const { users, addUser, updateUser, deleteUser } = useAuth();
+  const { users, createUser, updateUser, setActive } = useUsers();
   const [userForm, setUserForm]             = useState<UserFormState>(EMPTY_USER);
   const [editUserId, setEditUserId]         = useState<string | null>(null);
   const [showUserForm, setShowUserForm]     = useState(false);
   const [userFormErrors, setUserFormErrors] = useState<Partial<UserFormState>>({});
-  const [deleteUserId, setDeleteUserId]     = useState<string | null>(null);
 
   // ── Reportes: semana actual (offset 0 = esta semana, -1 = anterior, etc.) ──
   const [weekOffset, setWeekOffset] = useState(0);
@@ -231,21 +230,46 @@ export default function Admin() {
       return;
     }
 
-    const data: Omit<User, 'id'> = {
-      run: userForm.run, fullName: userForm.fullName, email: userForm.email,
-      phone: userForm.phone, address: userForm.address, commune: userForm.commune,
-      province: userForm.province, region: userForm.region,
-      birthDate: userForm.birthDate, gender: userForm.gender, role: userForm.role,
-    };
-    if (editUserId !== null) {
-      updateUser({ ...data, id: editUserId }, userForm.password || undefined);
-      showToast('Usuario actualizado correctamente.', 'success');
-    } else {
-      addUser({ ...data, password: userForm.password });
-      showToast('Usuario creado correctamente.', 'success');
+    try {
+      if (editUserId !== null) {
+        const original = users.find((u) => u.id === editUserId);
+        await updateUser(
+          editUserId,
+          {
+            fullName: userForm.fullName, phone: userForm.phone, address: userForm.address,
+            commune: userForm.commune, province: userForm.province, region: userForm.region,
+            birthDate: userForm.birthDate, gender: userForm.gender,
+          },
+          {
+            ...(userForm.email !== original?.email ? { email: userForm.email } : {}),
+            ...(userForm.role !== original?.role ? { role: userForm.role } : {}),
+            ...(userForm.password ? { password: userForm.password } : {}),
+          },
+        );
+        showToast('Usuario actualizado correctamente.', 'success');
+      } else {
+        await createUser({
+          run: userForm.run, fullName: userForm.fullName, email: userForm.email,
+          password: userForm.password, phone: userForm.phone, address: userForm.address,
+          commune: userForm.commune, province: userForm.province, region: userForm.region,
+          birthDate: userForm.birthDate || undefined, gender: userForm.gender, role: userForm.role,
+        });
+        showToast('Usuario creado correctamente.', 'success');
+      }
+      setShowUserForm(false);
+      setEditUserId(null);
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.message : 'No se pudo guardar el usuario.', 'danger');
     }
-    setShowUserForm(false);
-    setEditUserId(null);
+  };
+
+  const handleToggleActive = async (u: User) => {
+    try {
+      await setActive(u.id, !u.active);
+      showToast(u.active ? 'Usuario desactivado.' : 'Usuario reactivado.', 'info');
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.message : 'No se pudo cambiar el estado.', 'danger');
+    }
   };
 
   // ─────────────────────────────────────────────────────────
@@ -528,12 +552,12 @@ export default function Admin() {
               <thead>
                 <tr>
                   <th>RUN</th><th>Nombre</th><th>Correo</th>
-                  <th>Teléfono</th><th>Comuna</th><th>Acciones</th>
+                  <th>Teléfono</th><th>Comuna</th><th>Estado</th><th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {clientUsers.length === 0 ? (
-                  <tr><td colSpan={6}><div className="admin-empty-row">Sin clientes registrados.</div></td></tr>
+                  <tr><td colSpan={7}><div className="admin-empty-row">Sin clientes registrados.</div></td></tr>
                 ) : clientUsers.map((u) => (
                   <tr key={u.id}>
                     <td>{u.run}</td>
@@ -542,22 +566,18 @@ export default function Admin() {
                     <td>{u.phone}</td>
                     <td>{u.commune}</td>
                     <td>
-                      {deleteUserId === u.id ? (
-                        <div className="admin-del-confirm">
-                          <span>¿Eliminar?</span>
-                          <button className="btn btn-danger btn-sm"
-                            onClick={() => { deleteUser(u.id); setDeleteUserId(null); showToast('Usuario eliminado.', 'info'); }}>Sí</button>
-                          <button className="btn btn-outline-secondary btn-sm"
-                            onClick={() => setDeleteUserId(null)}>No</button>
-                        </div>
-                      ) : (
-                        <div className="admin-actions">
-                          <button className="btn btn-outline-primary btn-sm"
-                            onClick={() => { openEditUser(u); }}>Editar</button>
-                          <button className="btn btn-outline-danger btn-sm"
-                            onClick={() => setDeleteUserId(u.id)}>Eliminar</button>
-                        </div>
-                      )}
+                      <button
+                        className={`admin-toggle badge border-0 ${u.active ? 'text-bg-success' : 'text-bg-danger'}`}
+                        onClick={() => handleToggleActive(u)}
+                      >
+                        {u.active ? 'Activo' : 'Desactivado'}
+                      </button>
+                    </td>
+                    <td>
+                      <div className="admin-actions">
+                        <button className="btn btn-outline-primary btn-sm"
+                          onClick={() => { openEditUser(u); }}>Editar</button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -593,12 +613,12 @@ export default function Admin() {
             <table className="admin-table table table-hover align-middle mb-0">
               <thead>
                 <tr>
-                  <th>Nombre</th><th>Correo</th><th>Rol</th><th>Comuna</th><th>Acciones</th>
+                  <th>Nombre</th><th>Correo</th><th>Rol</th><th>Comuna</th><th>Estado</th><th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {staffUsers.length === 0 ? (
-                  <tr><td colSpan={5}><div className="admin-empty-row">Sin usuarios.</div></td></tr>
+                  <tr><td colSpan={6}><div className="admin-empty-row">Sin usuarios.</div></td></tr>
                 ) : staffUsers.map((u) => (
                   <tr key={u.id}>
                     <td>{u.fullName}</td>
@@ -608,31 +628,24 @@ export default function Admin() {
                     </td>
                     <td>{u.commune}</td>
                     <td>
-                      {deleteUserId === u.id ? (
-                        <div className="admin-del-confirm">
-                          <span>¿Eliminar?</span>
-                          <button className="btn btn-danger btn-sm"
-                            onClick={() => { deleteUser(u.id); setDeleteUserId(null); showToast('Usuario eliminado.', 'info'); }}>Sí</button>
-                          <button className="btn btn-outline-secondary btn-sm"
-                            onClick={() => setDeleteUserId(null)}>No</button>
-                        </div>
-                      ) : (
-                        <div className="admin-actions">
-                          <button className="btn btn-outline-primary btn-sm"
-                            onClick={() => openEditUser(u)}>Editar</button>
-                          <button className="btn btn-outline-danger btn-sm"
-                            onClick={() => setDeleteUserId(u.id)}>Eliminar</button>
-                        </div>
-                      )}
+                      <button
+                        className={`admin-toggle badge border-0 ${u.active ? 'text-bg-success' : 'text-bg-danger'}`}
+                        onClick={() => handleToggleActive(u)}
+                      >
+                        {u.active ? 'Activo' : 'Desactivado'}
+                      </button>
+                    </td>
+                    <td>
+                      <div className="admin-actions">
+                        <button className="btn btn-outline-primary btn-sm"
+                          onClick={() => openEditUser(u)}>Editar</button>
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <p className="text-muted" style={{ fontSize: '0.8rem', marginTop: '0.75rem' }}>
-            Credenciales demo: cualquier correo del sistema / contraseña <strong>123456</strong>
-          </p>
         </section>
       )}
 
@@ -817,7 +830,8 @@ function UserForm({ form, errors, editId, isClient, onChange, onSave, onCancel }
         <div className="col-md-4">
           <label className="form-label">RUN *</label>
           <input className={`form-control ${errors.run ? 'is-invalid' : ''}`}
-            value={form.run} onChange={onChange('run')} placeholder="12.345.678-5" />
+            value={form.run} onChange={onChange('run')} placeholder="12.345.678-5"
+            disabled={!!editId} title={editId ? 'El RUN no se puede modificar' : undefined} />
           {errors.run && <div className="invalid-feedback">{errors.run}</div>}
         </div>
         <div className="col-md-8">

@@ -43,6 +43,7 @@ export interface User {
   birthDate: string;
   gender: 'M' | 'F' | 'OTRO';
   role: 'cliente' | 'admin' | 'cajero' | 'despachador' | 'dueno';
+  active?: boolean;
   savedAddresses?: SavedAddress[];
 }
 

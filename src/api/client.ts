@@ -158,6 +158,47 @@ export interface LoginPayload {
   password: string;
 }
 
+export interface ApiUserProfile {
+  id: string;
+  run: string;
+  fullName: string;
+  phone: string;
+  address: string;
+  commune: string;
+  province: string;
+  region: string;
+  birthDate: string | null;
+  gender: ApiGender | null;
+  createdAt: string;
+}
+
+export interface UpdateUserProfilePayload {
+  fullName?: string;
+  phone?: string;
+  address?: string;
+  commune?: string;
+  province?: string;
+  region?: string;
+  birthDate?: string;
+  gender?: ApiGender;
+}
+
+export interface ApiCredential {
+  id: string;
+  email: string;
+  role: ApiRole;
+  active: boolean;
+  userId: string;
+  createdAt: string;
+}
+
+export interface AdminUpdateCredentialPayload {
+  email?: string;
+  role?: ApiRole;
+  active?: boolean;
+  password?: string;
+}
+
 export interface ApiSavedAddress {
   id: string;
   userId: string;
@@ -264,6 +305,10 @@ export const api = {
     login: (payload: LoginPayload) =>
       request<AuthResponse>('/auth/login', { method: 'POST', body: payload }),
     getProfile: () => request<ApiUser>('/auth/profile'),
+    // Admin/dueno: gestión de credenciales de otros usuarios (panel de administración)
+    listCredentials: () => request<ApiCredential[]>('/auth/users'),
+    updateCredential: (userId: string, payload: AdminUpdateCredentialPayload) =>
+      request<ApiCredential>(`/auth/users/${userId}`, { method: 'PUT', body: payload }),
   },
 
   users: {
@@ -272,6 +317,10 @@ export const api = {
       request<ApiSavedAddress>('/users/addresses', { method: 'POST', body: payload }),
     removeAddress: (id: string) =>
       request<void>(`/users/addresses/${id}`, { method: 'DELETE' }),
+    // Admin/dueno: listado y edición de perfiles de otros usuarios
+    list: () => request<ApiUserProfile[]>('/users'),
+    adminUpdate: (id: string, payload: UpdateUserProfilePayload) =>
+      request<ApiUserProfile>(`/users/${id}`, { method: 'PUT', body: payload }),
   },
 
   products: {

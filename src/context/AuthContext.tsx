@@ -39,27 +39,15 @@ function mapAddress(a: ApiSavedAddress): SavedAddress {
   return { id: a.id, label: a.label, address: a.address, commune: a.commune };
 }
 
-const USER_MGMT_WARNING =
-  'no implementado: requiere endpoint admin de gestión de usuarios, pendiente de confirmar contra Taiga';
-
 // ── Interfaz pública del contexto ──────────────────────────
 export interface AuthContextValue {
   user: User | null;
   isAuthenticated: boolean;
-  /** Lista de todos los usuarios (sin contraseñas) — para panel admin.
-   *  Stub interino: el backend no expone un listado de usuarios (ver Taiga). */
-  users: User[];
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   register: (
     data: Omit<User, 'id' | 'role'> & { password: string }
   ) => Promise<boolean>;
-  /** Admin: crear usuario con rol específico. Stub interino (sin endpoint backend). */
-  addUser: (data: Omit<User, 'id'> & { password: string }) => void;
-  /** Admin: editar usuario. Stub interino (sin endpoint backend). */
-  updateUser: (updated: User, newPassword?: string) => void;
-  /** Admin: eliminar usuario. Stub interino (sin endpoint backend). */
-  deleteUser: (id: string) => void;
   /** Guardar una nueva dirección en el perfil del usuario actual. */
   saveAddress: (addr: SavedAddress) => void;
   /** Eliminar una dirección guardada por índice. */
@@ -141,21 +129,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // ── Stubs interinos: gestión de usuarios por admin sin endpoint backend ──
-  const users: User[] = [];
-
-  const addUser = (_data: Omit<User, 'id'> & { password: string }) => {
-    console.warn(`addUser: ${USER_MGMT_WARNING}`);
-  };
-
-  const updateUser = (_updated: User, _newPassword?: string) => {
-    console.warn(`updateUser: ${USER_MGMT_WARNING}`);
-  };
-
-  const deleteUser = (_id: string) => {
-    console.warn(`deleteUser: ${USER_MGMT_WARNING}`);
-  };
-
   // ── Direcciones: respaldadas por /api/users/addresses ──
   const saveAddress = (addr: SavedAddress) => {
     if (!user) return;
@@ -177,13 +150,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         isAuthenticated: !!user,
-        users,
         login,
         logout,
         register,
-        addUser,
-        updateUser,
-        deleteUser,
         saveAddress,
         removeAddress,
       }}
