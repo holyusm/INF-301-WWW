@@ -1,6 +1,7 @@
 import {
   Injectable,
   ConflictException,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -11,6 +12,7 @@ import { Credential, UserRole } from './entities/credential.entity';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { AdminUpdateCredentialDto } from './dto/admin-update-credential.dto';
 
 @Injectable()
 export class AuthService {
@@ -108,5 +110,41 @@ export class AuthService {
       active: credential?.active,
       ...profile,
     };
+  }
+
+  /** GET /auth/users — panel de administración: credenciales de todos los usuarios */
+  async findAllCredentials(): Promise<Omit<Credential, 'passwordHash'>[]> {
+    return this.credentialRepo.find({
+      select: ['id', 'email', 'role', 'active', 'userId', 'createdAt'],
+    });
+  }
+
+  /** PUT /auth/users/:userId — admin/dueno editan rol, estado, email o contraseña de otro usuario */
+  async adminUpdateCredential(
+    userId: string,
+    dto: AdminUpdateCredentialDto,
+  ): Promise<Omit<Credential, 'passwordHash'>> {
+    const credential = await this.credentialRepo.findOneBy({ userId });
+    if (!credential) throw new NotFoundException('Credencial no encontrada');
+
+    if (dto.email && dto.email !== credential.email) {
+      const existingEmail = await this.credentialRepo.findOneBy({ email: dto.email });
+      if (existingEmail) throw new ConflictException('Email ya registrado');
+    }
+
+    // update() en vez de save(): solo toca las columnas presentes en el patch,
+    // sin depender de que passwordHash (select:false) haya sido cargado antes.
+    const patch: Partial<Credential> = {};
+    if (dto.email) patch.email = dto.email;
+    if (dto.role) patch.role = dto.role;
+    if (dto.active !== undefined) patch.active = dto.active;
+    if (dto.password) patch.passwordHash = await bcrypt.hash(dto.password, 10);
+
+    await this.credentialRepo.update(credential.id, patch);
+
+    return this.credentialRepo.findOne({
+      where: { userId },
+      select: ['id', 'email', 'role', 'active', 'userId', 'createdAt'],
+    }) as Promise<Omit<Credential, 'passwordHash'>>;
   }
 }

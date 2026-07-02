@@ -29,6 +29,10 @@ export class UsersService {
     return this.profileRepo.findOneBy({ id });
   }
 
+  async findAll(): Promise<UserProfile[]> {
+    return this.profileRepo.find({ order: { createdAt: 'DESC' } });
+  }
+
   async findByRun(run: string): Promise<UserProfile | null> {
     return this.profileRepo.findOneBy({ run });
   }

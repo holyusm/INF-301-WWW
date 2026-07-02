@@ -68,6 +68,8 @@ AppModule
 | `POST` | `/api/auth/register` | — | Registro; devuelve usuario + JWT |
 | `POST` | `/api/auth/login` | — | Login; devuelve usuario + JWT |
 | `GET` | `/api/auth/profile` | JWT | Perfil del usuario autenticado |
+| `GET` | `/api/auth/users` | JWT + admin/dueno | Lista credenciales (`email`, `role`, `active`, `userId`) de todos los usuarios, sin `passwordHash` |
+| `PUT` | `/api/auth/users/:userId` | JWT + admin/dueno | Edita rol, estado activo, email o contraseña de otro usuario (panel de administración) |
 
 **JWT payload:** `{ sub: userId, role, email }` — mapeado a `req.user = { id, email, role }`.
 
@@ -110,13 +112,17 @@ AppModule
 
 **Endpoints (todos requieren JWT):**
 
-| Método | Ruta | Descripción |
-|---|---|---|
-| `GET` | `/api/users/profile` | Perfil del usuario autenticado |
-| `PUT` | `/api/users/profile` | Actualiza datos del perfil |
-| `GET` | `/api/users/addresses` | Lista direcciones guardadas |
-| `POST` | `/api/users/addresses` | Agrega una dirección |
-| `DELETE` | `/api/users/addresses/:id` | Elimina una dirección (solo propietario) |
+| Método | Ruta | Auth | Descripción |
+|---|---|---|---|
+| `GET` | `/api/users/profile` | JWT | Perfil del usuario autenticado |
+| `PUT` | `/api/users/profile` | JWT | Actualiza datos del perfil |
+| `GET` | `/api/users/addresses` | JWT | Lista direcciones guardadas |
+| `POST` | `/api/users/addresses` | JWT | Agrega una dirección |
+| `DELETE` | `/api/users/addresses/:id` | JWT | Elimina una dirección (solo propietario) |
+| `GET` | `/api/users` | JWT + admin/dueno | Lista todos los perfiles (panel de administración) |
+| `PUT` | `/api/users/:id` | JWT + admin/dueno | Edita el perfil de cualquier usuario |
+
+**Gestión de usuarios en el panel de administración:** el frontend arma la vista combinada (nombre, email, rol, estado) haciendo *join* en memoria entre `GET /api/users` (perfil, propiedad de `user-service`) y `GET /api/auth/users` (credencial, propiedad de `auth-service`), usando `UserProfile.id === Credential.userId` como llave común. Ningún servicio importa entidades del otro para esto — es agregación en el cliente, no acoplamiento entre módulos. La creación de un usuario desde el panel reutiliza `POST /api/auth/register` (ya acepta cualquier rol); "eliminar" un usuario se traduce en `PUT /api/auth/users/:userId` con `active:false` (mismo patrón que la disponibilidad de productos: baja lógica, no DELETE físico, evitando dejar huérfanas las referencias por `userId` en pedidos, carritos y direcciones).
 
 ---
 

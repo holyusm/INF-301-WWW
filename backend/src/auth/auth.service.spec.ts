@@ -17,8 +17,10 @@ jest.mock('bcrypt');
 const mockCredentialRepo = {
   findOneBy: jest.fn(),
   findOne: jest.fn(),
+  find: jest.fn(),
   create: jest.fn(),
   save: jest.fn(),
+  update: jest.fn(),
 };
 
 const mockUsersService = {
@@ -191,6 +193,82 @@ describe('AuthService', () => {
       );
 
       await expect(service.getMe('no-existe')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  // ---------------------------------------------------------- findAllCredentials
+  describe('findAllCredentials', () => {
+    it('retorna las credenciales sin passwordHash', async () => {
+      const { passwordHash: _ph, ...safeCredential } = baseCredential;
+      mockCredentialRepo.find.mockResolvedValue([safeCredential]);
+
+      const result = await service.findAllCredentials();
+
+      expect(mockCredentialRepo.find).toHaveBeenCalledWith({
+        select: ['id', 'email', 'role', 'active', 'userId', 'createdAt'],
+      });
+      expect(result).toEqual([safeCredential]);
+      expect(result[0]).not.toHaveProperty('passwordHash');
+    });
+  });
+
+  // ------------------------------------------------------- adminUpdateCredential
+  describe('adminUpdateCredential', () => {
+    it('lanza NotFoundException cuando la credencial no existe', async () => {
+      mockCredentialRepo.findOneBy.mockResolvedValue(null);
+
+      await expect(
+        service.adminUpdateCredential('no-existe', { role: UserRole.CAJERO }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('lanza ConflictException cuando el nuevo email ya está en uso', async () => {
+      mockCredentialRepo.findOneBy
+        .mockResolvedValueOnce(baseCredential)
+        .mockResolvedValueOnce({ ...baseCredential, id: 'otro-id' });
+
+      await expect(
+        service.adminUpdateCredential('profile-uuid-1', { email: 'otro@fukusuke.cl' }),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('actualiza rol y estado activo mediante update()', async () => {
+      mockCredentialRepo.findOneBy.mockResolvedValue(baseCredential);
+      mockCredentialRepo.update.mockResolvedValue({ affected: 1 });
+      const { passwordHash: _ph, ...safeCredential } = baseCredential;
+      mockCredentialRepo.findOne.mockResolvedValue({
+        ...safeCredential,
+        role: UserRole.CAJERO,
+        active: false,
+      });
+
+      const result = await service.adminUpdateCredential('profile-uuid-1', {
+        role: UserRole.CAJERO,
+        active: false,
+      });
+
+      expect(mockCredentialRepo.update).toHaveBeenCalledWith(
+        baseCredential.id,
+        { role: UserRole.CAJERO, active: false },
+      );
+      expect(result.role).toBe(UserRole.CAJERO);
+      expect(result.active).toBe(false);
+      expect(result).not.toHaveProperty('passwordHash');
+    });
+
+    it('hashea la nueva contraseña cuando se provee', async () => {
+      mockCredentialRepo.findOneBy.mockResolvedValue(baseCredential);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('new-hashed-password');
+      mockCredentialRepo.update.mockResolvedValue({ affected: 1 });
+      mockCredentialRepo.findOne.mockResolvedValue(baseCredential);
+
+      await service.adminUpdateCredential('profile-uuid-1', { password: 'nueva123' });
+
+      expect(bcrypt.hash).toHaveBeenCalledWith('nueva123', 10);
+      expect(mockCredentialRepo.update).toHaveBeenCalledWith(
+        baseCredential.id,
+        { passwordHash: 'new-hashed-password' },
+      );
     });
   });
 });

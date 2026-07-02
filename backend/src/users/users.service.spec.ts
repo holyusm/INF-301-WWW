@@ -7,6 +7,7 @@ import { SavedAddress } from './entities/address.entity';
 
 const mockProfileRepo = {
   findOneBy: jest.fn(),
+  find: jest.fn(),
   save: jest.fn(),
 };
 
@@ -75,6 +76,20 @@ describe('UsersService', () => {
       await expect(service.getUserById('no-existe')).rejects.toThrow(
         NotFoundException,
       );
+    });
+  });
+
+  // -------------------------------------------------------------------- findAll
+  describe('findAll', () => {
+    it('retorna todos los perfiles ordenados por fecha de creación descendente', async () => {
+      mockProfileRepo.find.mockResolvedValue([baseProfile]);
+
+      const result = await service.findAll();
+
+      expect(mockProfileRepo.find).toHaveBeenCalledWith({
+        order: { createdAt: 'DESC' },
+      });
+      expect(result).toEqual([baseProfile]);
     });
   });
 
